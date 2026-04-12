@@ -91,9 +91,13 @@
     const viewer = new Cesium.Viewer("cesiumContainer", {
       timeline: false,
       animation: false,
+      shadows: true,
+      terrainShadows: Cesium.ShadowMode.ENABLED,
     });
 
-    // Fly to location
+    // Enable lighting so shadows and day/night are visible
+    viewer.scene.globe.enableLighting = true;
+
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, zoom),
       orientation: {
@@ -103,7 +107,7 @@
       }
     });
 
-    // Red pin for location
+    // Red pin
     viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(lng, lat),
       point: { pixelSize: 12, color: Cesium.Color.RED },
@@ -119,7 +123,7 @@
       }
     });
 
-    // --- SunCalc Setup ---
+    // --- SunCalc ---
     const today = new Date();
 
     function getDateAtMinute(minute) {
@@ -133,7 +137,6 @@
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // Key sun times
     const sunTimes = SunCalc.getTimes(today, lat, lng);
     document.getElementById("t-sunrise").textContent = formatTime(sunTimes.sunrise);
     document.getElementById("t-golden1").textContent = formatTime(sunTimes.goldenHour);
@@ -141,25 +144,22 @@
     document.getElementById("t-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
     document.getElementById("t-sunset").textContent = formatTime(sunTimes.sunset);
 
-    // Draw sun path arc
+    // Sun path arc — closer to ground (2000m above surface)
+    const ARC_HEIGHT = 2000;
     const pathPositions = [];
+
     for (let m = 0; m <= 1440; m += 5) {
       const d = getDateAtMinute(m);
       const pos = SunCalc.getPosition(d, lat, lng);
       if (pos.altitude > 0) {
-        const radius = 6371000 + 80000; // ~80km above earth surface
-        const azimuth = pos.azimuth;
-        const altitude = pos.altitude;
-        const x = radius * Math.cos(altitude) * Math.sin(azimuth);
-        const y = radius * Math.cos(altitude) * Math.cos(azimuth);
-        const z = radius * Math.sin(altitude);
-        // Convert to Cesium Cartesian relative to location
+        const distance = ARC_HEIGHT / Math.tan(pos.altitude);
+        const az = pos.azimuth;
+        const east = -distance * Math.sin(az);
+        const north = -distance * Math.cos(az);
+        const up = ARC_HEIGHT;
         const origin = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
-        const east = new Cesium.Cartesian3();
-        const north = new Cesium.Cartesian3();
-        const up = new Cesium.Cartesian3();
         const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-        const localPos = new Cesium.Cartesian3(x, y, z);
+        const localPos = new Cesium.Cartesian3(east, north, up);
         const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
         pathPositions.push(worldPos);
       }
@@ -178,9 +178,9 @@
       });
     }
 
-    // Sun position marker
+    // Sun marker
     const sunMarker = viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lng, lat, 1000),
+      position: Cesium.Cartesian3.fromDegrees(lng, lat, ARC_HEIGHT),
       point: {
         pixelSize: 18,
         color: Cesium.Color.YELLOW,
@@ -189,7 +189,12 @@
       }
     });
 
-    // Scrubber update
+    // Update Cesium's clock to match selected time so shadows move
+    function setCesiumTime(minute) {
+      const d = getDateAtMinute(minute);
+      viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
+    }
+
     function updateSun(minute) {
       const d = getDateAtMinute(minute);
       const pos = SunCalc.getPosition(d, lat, lng);
@@ -205,27 +210,27 @@
         `Azimuth: ${azDeg}° | Elevation: ${altDeg}°`;
 
       if (pos.altitude > 0) {
-        const radius = 6371000 + 80000;
+        const distance = ARC_HEIGHT / Math.tan(pos.altitude);
+        const az = pos.azimuth;
+        const east = -distance * Math.sin(az);
+        const north = -distance * Math.cos(az);
         const origin = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
         const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-        const localPos = new Cesium.Cartesian3(
-          radius * Math.cos(pos.altitude) * Math.sin(pos.azimuth),
-          radius * Math.cos(pos.altitude) * Math.cos(pos.azimuth),
-          radius * Math.sin(pos.altitude)
-        );
+        const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
         const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
         sunMarker.position = new Cesium.ConstantPositionProperty(worldPos);
         sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.YELLOW);
       } else {
         sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.GRAY);
       }
+
+      setCesiumTime(minute);
     }
 
     document.getElementById("scrubber").addEventListener("input", function() {
       updateSun(parseInt(this.value));
     });
 
-    // Init at noon
     updateSun(720);
   </script>
 </body>
