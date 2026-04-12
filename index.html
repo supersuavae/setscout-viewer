@@ -95,8 +95,14 @@
       terrainShadows: Cesium.ShadowMode.ENABLED,
     });
 
-    // Enable lighting so shadows and day/night are visible
+    // Enable lighting and shadows
     viewer.scene.globe.enableLighting = true;
+
+    // Add 3D OSM buildings for shadow casting
+    Cesium.createOsmBuildingsAsync().then(function(buildingTileset) {
+      viewer.scene.primitives.add(buildingTileset);
+      buildingTileset.shadows = Cesium.ShadowMode.ENABLED;
+    });
 
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lng, lat, zoom),
@@ -144,7 +150,7 @@
     document.getElementById("t-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
     document.getElementById("t-sunset").textContent = formatTime(sunTimes.sunset);
 
-    // Sun path arc — closer to ground (2000m above surface)
+    // Sun path arc at 2000m above surface
     const ARC_HEIGHT = 2000;
     const pathPositions = [];
 
@@ -156,10 +162,9 @@
         const az = pos.azimuth;
         const east = -distance * Math.sin(az);
         const north = -distance * Math.cos(az);
-        const up = ARC_HEIGHT;
         const origin = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
         const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-        const localPos = new Cesium.Cartesian3(east, north, up);
+        const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
         const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
         pathPositions.push(worldPos);
       }
@@ -189,7 +194,6 @@
       }
     });
 
-    // Update Cesium's clock to match selected time so shadows move
     function setCesiumTime(minute) {
       const d = getDateAtMinute(minute);
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
