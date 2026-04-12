@@ -12,6 +12,7 @@
 <body>
   <div id="cesiumContainer"></div>
   <script>
+    <script>
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3YTUzZDI5MC1hYzY0LTRhODctOGI0Mi1jZjM4NjFiYWZlM2QiLCJpZCI6NDE2OTcxLCJpYXQiOjE3NzU5NTgwNjh9.XLiMJOeS6bfl6V-SbpAe3tAAznxBPKheLvYVven0tXM';
 
     const params = new URLSearchParams(window.location.search);
@@ -20,7 +21,6 @@
     const zoom = parseFloat(params.get("zoom")) || 500;
 
     const viewer = new Cesium.Viewer("cesiumContainer", {
-      terrain: Cesium.Terrian.fromWorldTerrian(),
       timeline: false,
       animation: false,
     });
@@ -48,6 +48,7 @@
         pixelOffset: new Cesium.Cartesian2(0, -20),
       }
     });
+</script>
   </script>
 </body>
 </html>
