@@ -20,7 +20,7 @@
     const zoom = parseFloat(params.get("zoom")) || 500;
 
     const viewer = new Cesium.Viewer("cesiumContainer", {
-      terrainProvider: Cesium.createWorldTerrain(),
+      terrain: Cesium.Terrian.fromWorldTerrian(),
       timeline: false,
       animation: false,
     });
