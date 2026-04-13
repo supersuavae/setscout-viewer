@@ -8,7 +8,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
   <style>
     html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
-
     #ui {
       position: absolute;
       bottom: 30px;
@@ -22,47 +21,17 @@
       font-family: sans-serif;
       z-index: 999;
     }
-
-    #ui h3 {
-      margin: 0 0 10px 0;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #f0a500;
-    }
-
-    #timeDisplay {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    #sunStats {
-      font-size: 13px;
-      color: #ccc;
-      margin-bottom: 10px;
-    }
-
-    #scrubber {
-      width: 100%;
-      accent-color: #f0a500;
-    }
-
-    #keyTimes {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      color: #aaa;
-      margin-top: 6px;
-    }
-
+    #ui h3 { margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
+    #timeDisplay { font-size: 22px; font-weight: bold; margin-bottom: 6px; }
+    #sunStats { font-size: 13px; color: #ccc; margin-bottom: 10px; }
+    #scrubber { width: 100%; accent-color: #f0a500; }
+    #keyTimes { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 6px; }
     #keyTimes span { text-align: center; }
     #keyTimes .label { color: #f0a500; }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
-
   <div id="ui">
     <h3>☀️ Sun Path — <span id="locationName"></span></h3>
     <div id="timeDisplay">--:--</div>
@@ -93,12 +62,16 @@
       animation: false,
       shadows: true,
       terrainShadows: Cesium.ShadowMode.ENABLED,
+      terrain: Cesium.Terrain.fromWorldTerrain(),
     });
 
-    // Enable lighting and shadows
+    // FREEZE the clock — only scrubber moves time
+    viewer.clock.shouldAnimate = false;
+
+    // Enable lighting
     viewer.scene.globe.enableLighting = true;
 
-    // Add 3D OSM buildings for shadow casting
+    // Add 3D OSM buildings anchored to terrain
     Cesium.createOsmBuildingsAsync().then(function(buildingTileset) {
       viewer.scene.primitives.add(buildingTileset);
       buildingTileset.shadows = Cesium.ShadowMode.ENABLED;
@@ -129,7 +102,7 @@
       }
     });
 
-    // --- SunCalc ---
+    // SunCalc
     const today = new Date();
 
     function getDateAtMinute(minute) {
@@ -150,7 +123,7 @@
     document.getElementById("t-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
     document.getElementById("t-sunset").textContent = formatTime(sunTimes.sunset);
 
-    // Sun path arc at 2000m above surface
+    // Sun path arc
     const ARC_HEIGHT = 2000;
     const pathPositions = [];
 
@@ -194,11 +167,6 @@
       }
     });
 
-    function setCesiumTime(minute) {
-      const d = getDateAtMinute(minute);
-      viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
-    }
-
     function updateSun(minute) {
       const d = getDateAtMinute(minute);
       const pos = SunCalc.getPosition(d, lat, lng);
@@ -228,7 +196,8 @@
         sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.GRAY);
       }
 
-      setCesiumTime(minute);
+      // Set Cesium clock to this exact moment — frozen until next scrub
+      viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
     }
 
     document.getElementById("scrubber").addEventListener("input", function() {
