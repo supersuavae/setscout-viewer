@@ -57,24 +57,28 @@
 
     document.getElementById("locationName").textContent = decodeURIComponent(name);
 
+    // Build viewer without terrain first
     const viewer = new Cesium.Viewer("cesiumContainer", {
       timeline: false,
       animation: false,
       shadows: true,
-      terrainShadows: Cesium.ShadowMode.ENABLED,
-      terrain: Cesium.Terrain.fromWorldTerrain(),
     });
 
-    // FREEZE the clock — only scrubber moves time
+    // Freeze clock
     viewer.clock.shouldAnimate = false;
 
     // Enable lighting
     viewer.scene.globe.enableLighting = true;
 
-    // Add 3D OSM buildings anchored to terrain
-    Cesium.createOsmBuildingsAsync().then(function(buildingTileset) {
-      viewer.scene.primitives.add(buildingTileset);
-      buildingTileset.shadows = Cesium.ShadowMode.ENABLED;
+    // Load terrain async to avoid black tile conflict
+    Cesium.CesiumTerrainProvider.fromIonAssetId(1).then(function(terrain) {
+      viewer.terrainProvider = terrain;
+
+      // Only add buildings AFTER terrain is loaded
+      Cesium.createOsmBuildingsAsync().then(function(buildingTileset) {
+        viewer.scene.primitives.add(buildingTileset);
+        buildingTileset.shadows = Cesium.ShadowMode.ENABLED;
+      });
     });
 
     viewer.camera.flyTo({
@@ -86,10 +90,14 @@
       }
     });
 
-    // Red pin
+    // Pin elevated 20m above ground so it never clips into terrain
     viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lng, lat),
-      point: { pixelSize: 12, color: Cesium.Color.RED },
+      position: Cesium.Cartesian3.fromDegrees(lng, lat, 20),
+      point: {
+        pixelSize: 12,
+        color: Cesium.Color.RED,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
       label: {
         text: decodeURIComponent(name),
         font: "14pt sans-serif",
@@ -99,6 +107,7 @@
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         pixelOffset: new Cesium.Cartesian2(0, -20),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       }
     });
 
@@ -164,6 +173,7 @@
         color: Cesium.Color.YELLOW,
         outlineColor: Cesium.Color.ORANGE,
         outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       }
     });
 
@@ -196,7 +206,6 @@
         sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.GRAY);
       }
 
-      // Set Cesium clock to this exact moment — frozen until next scrub
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
     }
 
