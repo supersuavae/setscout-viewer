@@ -50,12 +50,12 @@
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3YTUzZDI5MC1hYzY0LTRhODctOGI0Mi1jZjM4NjFiYWZlM2QiLCJpZCI6NDE2OTcxLCJpYXQiOjE3NzU5NTgwNjh9.XLiMJOeS6bfl6V-SbpAe3tAAznxBPKheLvYVven0tXM';
 
     const params = new URLSearchParams(window.location.search);
-    const lat = parseFloat(params.get("lat")) || 25.7617;
-    const lng = parseFloat(params.get("lng")) || -80.1918;
+    let lat = parseFloat(params.get("lat")) || 25.7617;
+    let lng = parseFloat(params.get("lng")) || -80.1918;
     const zoom = parseFloat(params.get("zoom")) || 800;
-    const name = params.get("name") || "Location";
+    let locationName = params.get("name") ? decodeURIComponent(params.get("name")) : "Location";
 
-    document.getElementById("locationName").textContent = decodeURIComponent(name);
+    document.getElementById("locationName").textContent = locationName;
 
     const viewer = new Cesium.Viewer("cesiumContainer", {
       timeline: false,
@@ -67,7 +67,6 @@
     viewer.scene.globe.enableLighting = true;
     viewer.scene.globe.depthTestAgainstTerrain = true;
 
-    // Load terrain, then buildings
     Cesium.CesiumTerrainProvider.fromIonAssetId(1).then(function(terrain) {
       viewer.terrainProvider = terrain;
       Cesium.createOsmBuildingsAsync().then(function(buildingTileset) {
@@ -85,32 +84,81 @@
       }
     });
 
-    // Pin clamped to ground — stays fixed no matter how you move the camera
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+    // --- Pin and sun arc as removable entities ---
+    let pinEntity = null;
+    let sunArcEntity = null;
+    const sunMarker = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lng, lat, 2000),
       point: {
-        pixelSize: 14,
-        color: Cesium.Color.RED,
-        outlineColor: Cesium.Color.WHITE,
+        pixelSize: 18,
+        color: Cesium.Color.YELLOW,
+        outlineColor: Cesium.Color.ORANGE,
         outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      label: {
-        text: decodeURIComponent(name),
-        font: "bold 13pt sans-serif",
-        fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        pixelOffset: new Cesium.Cartesian2(0, -16),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       }
     });
 
-    // SunCalc
+    function placePin(pinLat, pinLng, pinName) {
+      if (pinEntity) viewer.entities.remove(pinEntity);
+      pinEntity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(pinLng, pinLat, 0),
+        point: {
+          pixelSize: 14,
+          color: Cesium.Color.RED,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: pinName,
+          font: "bold 13pt sans-serif",
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        }
+      });
+    }
+
+    function buildSunArc(arcLat, arcLng) {
+      if (sunArcEntity) viewer.entities.remove(sunArcEntity);
+      const ARC_HEIGHT = 2000;
+      const pathPositions = [];
+      for (let m = 0; m <= 1440; m += 5) {
+        const d = getDateAtMinute(m);
+        const pos = SunCalc.getPosition(d, arcLat, arcLng);
+        if (pos.altitude > 0) {
+          const distance = ARC_HEIGHT / Math.tan(pos.altitude);
+          const az = pos.azimuth;
+          const east = -distance * Math.sin(az);
+          const north = -distance * Math.cos(az);
+          const origin = Cesium.Cartesian3.fromDegrees(arcLng, arcLat, 0);
+          const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
+          const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
+          const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
+          pathPositions.push(worldPos);
+        }
+      }
+      if (pathPositions.length > 1) {
+        sunArcEntity = viewer.entities.add({
+          polyline: {
+            positions: pathPositions,
+            width: 3,
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.3,
+              color: Cesium.Color.ORANGE,
+            }),
+          }
+        });
+      }
+    }
+
+    // SunCalc helpers
     const today = new Date();
 
     function getDateAtMinute(minute) {
@@ -124,57 +172,16 @@
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    const sunTimes = SunCalc.getTimes(today, lat, lng);
-    document.getElementById("t-sunrise").textContent = formatTime(sunTimes.sunrise);
-    document.getElementById("t-golden1").textContent = formatTime(sunTimes.goldenHour);
-    document.getElementById("t-noon").textContent = formatTime(sunTimes.solarNoon);
-    document.getElementById("t-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
-    document.getElementById("t-sunset").textContent = formatTime(sunTimes.sunset);
+    function updateKeyTimes(kLat, kLng) {
+      const sunTimes = SunCalc.getTimes(today, kLat, kLng);
+      document.getElementById("t-sunrise").textContent = formatTime(sunTimes.sunrise);
+      document.getElementById("t-golden1").textContent = formatTime(sunTimes.goldenHour);
+      document.getElementById("t-noon").textContent = formatTime(sunTimes.solarNoon);
+      document.getElementById("t-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
+      document.getElementById("t-sunset").textContent = formatTime(sunTimes.sunset);
+    }
 
-    // Sun path arc
     const ARC_HEIGHT = 2000;
-    const pathPositions = [];
-
-    for (let m = 0; m <= 1440; m += 5) {
-      const d = getDateAtMinute(m);
-      const pos = SunCalc.getPosition(d, lat, lng);
-      if (pos.altitude > 0) {
-        const distance = ARC_HEIGHT / Math.tan(pos.altitude);
-        const az = pos.azimuth;
-        const east = -distance * Math.sin(az);
-        const north = -distance * Math.cos(az);
-        const origin = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
-        const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-        const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
-        const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
-        pathPositions.push(worldPos);
-      }
-    }
-
-    if (pathPositions.length > 1) {
-      viewer.entities.add({
-        polyline: {
-          positions: pathPositions,
-          width: 3,
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.3,
-            color: Cesium.Color.ORANGE,
-          }),
-        }
-      });
-    }
-
-    // Sun marker
-    const sunMarker = viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lng, lat, ARC_HEIGHT),
-      point: {
-        pixelSize: 18,
-        color: Cesium.Color.YELLOW,
-        outlineColor: Cesium.Color.ORANGE,
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      }
-    });
 
     function updateSun(minute) {
       const d = getDateAtMinute(minute);
@@ -208,11 +215,39 @@
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
     }
 
+    // Watch for camera stops moving after a search — update pin and arc
+    let cameraStopTimer = null;
+    viewer.camera.moveEnd.addEventListener(function() {
+      // Only trigger if camera moved far from original pin (i.e. user searched)
+      const cameraPos = viewer.camera.positionCartographic;
+      const newLng = Cesium.Math.toDegrees(cameraPos.longitude);
+      const newLat = Cesium.Math.toDegrees(cameraPos.latitude);
+
+      const distLat = Math.abs(newLat - lat);
+      const distLng = Math.abs(newLng - lng);
+
+      // If camera center moved more than ~0.01 degrees, treat as new location search
+      if (distLat > 0.01 || distLng > 0.01) {
+        lat = newLat;
+        lng = newLng;
+        locationName = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        document.getElementById("locationName").textContent = locationName;
+        placePin(lat, lng, locationName);
+        buildSunArc(lat, lng);
+        updateKeyTimes(lat, lng);
+        updateSun(parseInt(document.getElementById("scrubber").value));
+      }
+    });
+
+    // Init
+    placePin(lat, lng, locationName);
+    buildSunArc(lat, lng);
+    updateKeyTimes(lat, lng);
+    updateSun(720);
+
     document.getElementById("scrubber").addEventListener("input", function() {
       updateSun(parseInt(this.value));
     });
-
-    updateSun(720);
   </script>
 </body>
 </html>
