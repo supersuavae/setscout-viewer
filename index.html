@@ -8,6 +8,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
   <style>
     html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+    /* Bottom sun panel */
     #ui {
       position: absolute;
       bottom: 30px;
@@ -22,19 +24,114 @@
       z-index: 999;
     }
     #ui h3 { margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
-    #timeDisplay { font-size: 22px; font-weight: bold; margin-bottom: 6px; }
+    #timeDisplay { font-size: 18px; font-weight: bold; margin-bottom: 6px; color: #fff; }
     #sunStats { font-size: 13px; color: #ccc; margin-bottom: 10px; }
     #scrubber { width: 100%; accent-color: #f0a500; }
     #keyTimes { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 6px; }
     #keyTimes span { text-align: center; }
     #keyTimes .label { color: #f0a500; }
+
+    /* Collapsible date panel */
+    #dateToggle {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      background: rgba(0,0,0,0.85);
+      color: #f0a500;
+      border: 1px solid #f0a500;
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      padding: 10px 8px;
+      cursor: pointer;
+      font-family: sans-serif;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 1001;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      letter-spacing: 1px;
+    }
+
+    #datePanel {
+      position: absolute;
+      top: 50%;
+      right: -320px;
+      transform: translateY(-50%);
+      width: 280px;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      border: 1px solid #f0a500;
+      border-radius: 12px 0 0 12px;
+      padding: 20px;
+      font-family: sans-serif;
+      z-index: 1000;
+      transition: right 0.3s ease;
+    }
+
+    #datePanel.open {
+      right: 0;
+    }
+
+    #datePanel h3 {
+      margin: 0 0 16px 0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #f0a500;
+    }
+
+    #datePanel label {
+      font-size: 12px;
+      color: #aaa;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    #shootDate {
+      width: 100%;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #f0a500;
+      background: #111;
+      color: #fff;
+      font-size: 14px;
+      box-sizing: border-box;
+      margin-bottom: 16px;
+    }
+
+    #datePanel .sun-summary {
+      font-size: 12px;
+      color: #ccc;
+      line-height: 1.8;
+    }
+
+    #datePanel .sun-summary span {
+      color: #f0a500;
+      font-weight: bold;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #333;
+      margin: 14px 0;
+    }
+
+    #goldenHourNote {
+      font-size: 11px;
+      color: #888;
+      margin-top: 10px;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
+
+  <!-- Bottom sun scrubber panel -->
   <div id="ui">
     <h3>☀️ Sun Path — <span id="locationName"></span></h3>
-    <div id="timeDisplay">--:--</div>
+    <div id="timeDisplay">--</div>
     <div id="sunStats">Azimuth: -- | Elevation: --</div>
     <input type="range" id="scrubber" min="0" max="1440" value="720" />
     <div id="keyTimes">
@@ -43,6 +140,26 @@
       <span><div class="label">☀️</div><div id="t-noon">--</div></span>
       <span><div class="label">🌆</div><div id="t-golden2">--</div></span>
       <span><div class="label">🌃</div><div id="t-sunset">--</div></span>
+    </div>
+  </div>
+
+  <!-- Collapsible date panel -->
+  <div id="dateToggle" onclick="toggleDatePanel()">📅 SHOOT DATE</div>
+  <div id="datePanel">
+    <h3>📅 Shoot Date Planner</h3>
+    <label>Select your shoot date:</label>
+    <input type="date" id="shootDate" />
+    <hr class="divider" />
+    <div class="sun-summary">
+      <div>🌅 Sunrise: <span id="dp-sunrise">--</span></div>
+      <div>🌇 Golden Hour AM: <span id="dp-golden1">--</span></div>
+      <div>☀️ Solar Noon: <span id="dp-noon">--</span></div>
+      <div>🌆 Golden Hour PM: <span id="dp-golden2">--</span></div>
+      <div>🌃 Sunset: <span id="dp-sunset">--</span></div>
+      <div>⏱️ Daylight: <span id="dp-daylight">--</span></div>
+    </div>
+    <div id="goldenHourNote">
+      💡 Golden hour gives warm, directional light ideal for dramatic cinematography. Plan wide shots within 30 min of sunrise or sunset.
     </div>
   </div>
 
@@ -56,6 +173,11 @@
     let locationName = params.get("name") ? decodeURIComponent(params.get("name")) : "Location";
 
     document.getElementById("locationName").textContent = locationName;
+
+    // Set date picker to today
+    const todayStr = new Date().toISOString().split("T")[0];
+    document.getElementById("shootDate").value = todayStr;
+    let selectedDate = new Date();
 
     const viewer = new Cesium.Viewer("cesiumContainer", {
       timeline: false,
@@ -84,9 +206,15 @@
       }
     });
 
-    // --- Pin and sun arc as removable entities ---
+    // Toggle date panel
+    function toggleDatePanel() {
+      document.getElementById("datePanel").classList.toggle("open");
+    }
+
+    // Pin and arc
     let pinEntity = null;
     let sunArcEntity = null;
+
     const sunMarker = viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(lng, lat, 2000),
       point: {
@@ -125,44 +253,8 @@
       });
     }
 
-    function buildSunArc(arcLat, arcLng) {
-      if (sunArcEntity) viewer.entities.remove(sunArcEntity);
-      const ARC_HEIGHT = 2000;
-      const pathPositions = [];
-      for (let m = 0; m <= 1440; m += 5) {
-        const d = getDateAtMinute(m);
-        const pos = SunCalc.getPosition(d, arcLat, arcLng);
-        if (pos.altitude > 0) {
-          const distance = ARC_HEIGHT / Math.tan(pos.altitude);
-          const az = pos.azimuth;
-          const east = -distance * Math.sin(az);
-          const north = -distance * Math.cos(az);
-          const origin = Cesium.Cartesian3.fromDegrees(arcLng, arcLat, 0);
-          const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-          const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
-          const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
-          pathPositions.push(worldPos);
-        }
-      }
-      if (pathPositions.length > 1) {
-        sunArcEntity = viewer.entities.add({
-          polyline: {
-            positions: pathPositions,
-            width: 3,
-            material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.3,
-              color: Cesium.Color.ORANGE,
-            }),
-          }
-        });
-      }
-    }
-
-    // SunCalc helpers
-    const today = new Date();
-
-    function getDateAtMinute(minute) {
-      const d = new Date(today);
+    function getDateAtMinute(date, minute) {
+      const d = new Date(date);
       d.setHours(0, 0, 0, 0);
       d.setMinutes(minute);
       return d;
@@ -172,82 +264,5 @@
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    function updateKeyTimes(kLat, kLng) {
-      const sunTimes = SunCalc.getTimes(today, kLat, kLng);
-      document.getElementById("t-sunrise").textContent = formatTime(sunTimes.sunrise);
-      document.getElementById("t-golden1").textContent = formatTime(sunTimes.goldenHour);
-      document.getElementById("t-noon").textContent = formatTime(sunTimes.solarNoon);
-      document.getElementById("t-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
-      document.getElementById("t-sunset").textContent = formatTime(sunTimes.sunset);
-    }
-
-    const ARC_HEIGHT = 2000;
-
-    function updateSun(minute) {
-      const d = getDateAtMinute(minute);
-      const pos = SunCalc.getPosition(d, lat, lng);
-
-      const hours = Math.floor(minute / 60);
-      const mins = minute % 60;
-      document.getElementById("timeDisplay").textContent =
-        `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
-
-      const azDeg = ((pos.azimuth * 180 / Math.PI) + 180).toFixed(1);
-      const altDeg = (pos.altitude * 180 / Math.PI).toFixed(1);
-      document.getElementById("sunStats").textContent =
-        `Azimuth: ${azDeg}° | Elevation: ${altDeg}°`;
-
-      if (pos.altitude > 0) {
-        const distance = ARC_HEIGHT / Math.tan(pos.altitude);
-        const az = pos.azimuth;
-        const east = -distance * Math.sin(az);
-        const north = -distance * Math.cos(az);
-        const origin = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
-        const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-        const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
-        const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
-        sunMarker.position = new Cesium.ConstantPositionProperty(worldPos);
-        sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.YELLOW);
-      } else {
-        sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.GRAY);
-      }
-
-      viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
-    }
-
-    // Watch for camera stops moving after a search — update pin and arc
-    let cameraStopTimer = null;
-    viewer.camera.moveEnd.addEventListener(function() {
-      // Only trigger if camera moved far from original pin (i.e. user searched)
-      const cameraPos = viewer.camera.positionCartographic;
-      const newLng = Cesium.Math.toDegrees(cameraPos.longitude);
-      const newLat = Cesium.Math.toDegrees(cameraPos.latitude);
-
-      const distLat = Math.abs(newLat - lat);
-      const distLng = Math.abs(newLng - lng);
-
-      // If camera center moved more than ~0.01 degrees, treat as new location search
-      if (distLat > 0.01 || distLng > 0.01) {
-        lat = newLat;
-        lng = newLng;
-        locationName = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        document.getElementById("locationName").textContent = locationName;
-        placePin(lat, lng, locationName);
-        buildSunArc(lat, lng);
-        updateKeyTimes(lat, lng);
-        updateSun(parseInt(document.getElementById("scrubber").value));
-      }
-    });
-
-    // Init
-    placePin(lat, lng, locationName);
-    buildSunArc(lat, lng);
-    updateKeyTimes(lat, lng);
-    updateSun(720);
-
-    document.getElementById("scrubber").addEventListener("input", function() {
-      updateSun(parseInt(this.value));
-    });
-  </script>
-</body>
-</html>
+    function formatDaylight(sunrise, sunset) {
+      const mins = Math.round((sunset - sunrise) / 6
