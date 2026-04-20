@@ -464,8 +464,9 @@
     }
 
     viewer.geocoder.viewModel.search.afterExecute.addEventListener(function() {
-      // Grab the search text before the timeout clears it
-      const searchedName = viewer.geocoder.viewModel.searchText || "";
+      // Grab text directly from the input element before Cesium clears it
+      const searchInput = document.querySelector(".cesium-geocoder-input");
+      const searchedName = searchInput ? searchInput.value.trim() : "";
       setTimeout(function() {
         const cameraPos = viewer.camera.positionCartographic;
         const newLng = Cesium.Math.toDegrees(cameraPos.longitude);
