@@ -1,7 +1,530 @@
 <!DOCTYPE html>
-<html>
-<head><title>SetScout Test</title></head>
-<body style="background:red;color:white;font-size:40px;padding:40px;">
-  CLEARING CACHE
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SetScout 3D Viewer</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+  <style>
+    html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+    /* Hide Cesium's built-in geocoder */
+    .cesium-viewer-geocoderContainer { display: none !important; }
+
+    /* Custom search bar */
+    #searchBar {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 1500;
+      width: 420px;
+    }
+    #searchInput {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #f0a500;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      font-size: 14px;
+      font-family: sans-serif;
+      outline: none;
+    }
+    #searchInput::placeholder { color: #888; }
+    #searchBtn {
+      padding: 10px 16px;
+      background: #f0a500;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: sans-serif;
+    }
+    #searchBtn:hover { background: #e09400; }
+
+    #ui {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; padding: 14px 20px;
+      border-radius: 12px; width: 420px; font-family: sans-serif; z-index: 999;
+    }
+    #ui h3 { margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
+    #timeDisplay { font-size: 18px; font-weight: bold; margin-bottom: 6px; color: #fff; }
+    #sunStats { font-size: 13px; color: #ccc; margin-bottom: 10px; }
+    #scrubber { width: 100%; accent-color: #f0a500; }
+    #keyTimes { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 6px; }
+    #keyTimes span { text-align: center; }
+    #keyTimes .label { color: #f0a500; }
+
+    #dateToggle {
+      position: absolute; top: 50%; right: 0; transform: translateY(-50%);
+      background: rgba(0,0,0,0.85); color: #f0a500; border: 1px solid #f0a500;
+      border-right: none; border-radius: 8px 0 0 8px; padding: 10px 8px;
+      cursor: pointer; font-family: sans-serif; font-size: 12px; font-weight: bold;
+      z-index: 1001; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 1px;
+    }
+    #datePanel {
+      position: absolute; top: 50%; right: -320px; transform: translateY(-50%);
+      width: 280px; background: rgba(0,0,0,0.85); color: #fff;
+      border: 1px solid #f0a500; border-radius: 12px 0 0 12px;
+      padding: 20px; font-family: sans-serif; z-index: 1000; transition: right 0.3s ease;
+    }
+    #datePanel.open { right: 0; }
+    #datePanel h3 { margin: 0 0 16px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
+    #datePanel label { font-size: 12px; color: #aaa; display: block; margin-bottom: 6px; }
+    #shootDate {
+      width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #f0a500;
+      background: #111; color: #fff; font-size: 14px; box-sizing: border-box; margin-bottom: 16px;
+    }
+    #datePanel .sun-summary { font-size: 12px; color: #ccc; line-height: 1.8; }
+    #datePanel .sun-summary span { color: #f0a500; font-weight: bold; }
+    .divider { border: none; border-top: 1px solid #333; margin: 14px 0; }
+    #goldenHourNote { font-size: 11px; color: #888; margin-top: 10px; line-height: 1.6; }
+
+    #municPopup {
+      display: none; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); width: 340px;
+      background: rgba(10,10,10,0.95); color: #fff;
+      border: 1px solid #f0a500; border-radius: 14px; padding: 22px;
+      font-family: sans-serif; z-index: 2000; box-shadow: 0 0 30px rgba(240,165,0,0.2);
+    }
+    #municPopup.visible { display: block; }
+    #municPopup h3 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
+    #municPopup .county-name { font-size: 18px; font-weight: bold; margin-bottom: 14px; color: #fff; }
+    #municPopup .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; line-height: 1.5; }
+    #municPopup .row .label { color: #888; width: 45%; }
+    #municPopup .row .value { color: #fff; width: 55%; text-align: right; }
+    #municPopup .row .value.yellow { color: #f0a500; }
+    #municPopup .row .value.green { color: #4caf50; }
+    #municPopup .restrictions {
+      margin-top: 10px; font-size: 11px; color: #aaa;
+      background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px; line-height: 1.6;
+    }
+    #municPopup .restrictions strong { color: #f0a500; }
+    #municPopup .btn-row { display: flex; gap: 8px; margin-top: 14px; }
+    #municPopup .btn { flex: 1; padding: 8px; border-radius: 8px; border: none; font-size: 12px; font-weight: bold; cursor: pointer; }
+    #municPopup .btn-flag { background: rgba(240,165,0,0.15); color: #f0a500; border: 1px solid #f0a500; }
+    #municPopup .btn-close { background: rgba(255,255,255,0.08); color: #aaa; border: 1px solid #444; }
+    #municPopup .btn-request { background: #f0a500; color: #000; }
+    #municPopup .not-covered { text-align: center; padding: 10px 0; }
+    #municPopup .not-covered p { color: #aaa; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
+    #flagConfirm { display: none; font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; }
+    #municPopup .last-verified { font-size: 10px; color: #555; margin-top: 10px; text-align: right; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <!-- Custom search bar -->
+  <div id="searchBar">
+    <input type="text" id="searchInput" placeholder="🔍 Search any location..." />
+    <button id="searchBtn" onclick="doSearch()">Go</button>
+  </div>
+
+  <div id="ui">
+    <h3>☀️ Sun Path — <span id="locationName"></span></h3>
+    <div id="timeDisplay">--</div>
+    <div id="sunStats">Azimuth: -- | Elevation: --</div>
+    <input type="range" id="scrubber" min="0" max="1440" value="720" />
+    <div id="keyTimes">
+      <span><div class="label">🌅</div><div id="t-sunrise">--</div></span>
+      <span><div class="label">🌇</div><div id="t-golden1">--</div></span>
+      <span><div class="label">☀️</div><div id="t-noon">--</div></span>
+      <span><div class="label">🌆</div><div id="t-golden2">--</div></span>
+      <span><div class="label">🌃</div><div id="t-sunset">--</div></span>
+    </div>
+  </div>
+
+  <div id="dateToggle" onclick="toggleDatePanel()">📅 SHOOT DATE</div>
+  <div id="datePanel">
+    <h3>📅 Shoot Date Planner</h3>
+    <label>Select your shoot date:</label>
+    <input type="date" id="shootDate" />
+    <hr class="divider" />
+    <div class="sun-summary">
+      <div>🌅 Sunrise: <span id="dp-sunrise">--</span></div>
+      <div>🌇 Golden Hour AM: <span id="dp-golden1">--</span></div>
+      <div>☀️ Solar Noon: <span id="dp-noon">--</span></div>
+      <div>🌆 Golden Hour PM: <span id="dp-golden2">--</span></div>
+      <div>🌃 Sunset: <span id="dp-sunset">--</span></div>
+      <div>⏱️ Daylight: <span id="dp-daylight">--</span></div>
+    </div>
+    <div id="goldenHourNote">
+      💡 Golden hour gives warm, directional light ideal for dramatic cinematography. Plan wide shots within 30 min of sunrise or sunset.
+    </div>
+  </div>
+
+  <div id="municPopup">
+    <h3>🏛️ Municipal Intel</h3>
+    <div id="municContent"></div>
+  </div>
+
+  <script>
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3YTUzZDI5MC1hYzY0LTRhODctOGI0Mi1jZjM4NjFiYWZlM2QiLCJpZCI6NDE2OTcxLCJpYXQiOjE3NzU5NTgwNjh9.XLiMJOeS6bfl6V-SbpAe3tAAznxBPKheLvYVven0tXM';
+
+    const municipalData = {
+      "Miami-Dade": {
+        state: "FL",
+        filmOffice: "Miami-Dade Office of Film & Entertainment",
+        contact: "film@miamidade.gov",
+        phone: "(305) 375-3288",
+        permitRequired: true,
+        permitFee: "$150 – $500",
+        processingTime: "5–10 business days",
+        restrictions: ["No filming after 11PM in residential areas", "Drone permits required separately", "Beach locations need Parks dept approval"],
+        lastVerified: "March 2026",
+        bounds: { minLat: 25.1, maxLat: 26.0, minLng: -80.9, maxLng: -80.0 }
+      },
+      "Fulton": {
+        state: "GA",
+        filmOffice: "Georgia Film Office",
+        contact: "gafilm@georgia.org",
+        phone: "(404) 962-4052",
+        permitRequired: true,
+        permitFee: "$200 – $750",
+        processingTime: "3–7 business days",
+        restrictions: ["Street closures require 2 weeks notice", "No pyrotechnics without fire marshal approval", "Historic district locations need additional review"],
+        lastVerified: "March 2026",
+        bounds: { minLat: 33.5, maxLat: 34.1, minLng: -84.9, maxLng: -84.2 }
+      },
+      "Mecklenburg": {
+        state: "NC",
+        filmOffice: "Charlotte Regional Film Commission",
+        contact: "film@charlotteregion.com",
+        phone: "(704) 347-8942",
+        permitRequired: true,
+        permitFee: "$100 – $400",
+        processingTime: "5–7 business days",
+        restrictions: ["Park filming requires Parks & Rec permit", "No amplified sound before 8AM", "Traffic control officer required for street scenes"],
+        lastVerified: "March 2026",
+        bounds: { minLat: 35.0, maxLat: 35.5, minLng: -81.1, maxLng: -80.6 }
+      }
+    };
+
+    function getCountyForLocation(checkLat, checkLng) {
+      for (const [county, data] of Object.entries(municipalData)) {
+        const b = data.bounds;
+        if (checkLat >= b.minLat && checkLat <= b.maxLat &&
+            checkLng >= b.minLng && checkLng <= b.maxLng) {
+          return { county, ...data };
+        }
+      }
+      return null;
+    }
+
+    function showMunicPopup(checkLat, checkLng) {
+      const data = getCountyForLocation(checkLat, checkLng);
+      const popup = document.getElementById("municPopup");
+      const content = document.getElementById("municContent");
+      if (data) {
+        content.innerHTML = `
+          <div class="county-name">${data.county} County, ${data.state}</div>
+          <div class="row"><span class="label">Film Office</span><span class="value">${data.filmOffice}</span></div>
+          <div class="row"><span class="label">Phone</span><span class="value">${data.phone}</span></div>
+          <div class="row"><span class="label">Email</span><span class="value">${data.contact}</span></div>
+          <div class="row"><span class="label">Permit Required</span><span class="value ${data.permitRequired ? 'yellow' : 'green'}">${data.permitRequired ? '⚠️ Yes' : '✅ No'}</span></div>
+          <div class="row"><span class="label">Permit Fee</span><span class="value">${data.permitFee}</span></div>
+          <div class="row"><span class="label">Processing Time</span><span class="value">${data.processingTime}</span></div>
+          <div class="restrictions">
+            <strong>⚠️ Restrictions</strong><br/>
+            ${data.restrictions.map(r => `• ${r}`).join('<br/>')}
+          </div>
+          <div class="last-verified">Last verified: ${data.lastVerified}</div>
+          <div class="btn-row">
+            <button class="btn btn-flag" onclick="flagData()">🚩 Flag as Outdated</button>
+            <button class="btn btn-close" onclick="closeMunicPopup()">Close</button>
+          </div>
+          <div id="flagConfirm">✅ Thanks! We'll review this data.</div>
+        `;
+      } else {
+        content.innerHTML = `
+          <div class="not-covered">
+            <div class="county-name">County Not Yet Covered</div>
+            <p>We don't have municipal permit data for this location yet. Help us expand SetScout's coverage by requesting this county.</p>
+            <button class="btn btn-request" onclick="requestCounty(${checkLat}, ${checkLng})">📬 Request This County</button>
+            <br/><br/>
+            <button class="btn btn-close" onclick="closeMunicPopup()">Close</button>
+          </div>
+        `;
+      }
+      popup.classList.add("visible");
+    }
+
+    function closeMunicPopup() {
+      document.getElementById("municPopup").classList.remove("visible");
+    }
+
+    function flagData() {
+      document.getElementById("flagConfirm").style.display = "block";
+      setTimeout(() => { document.getElementById("flagConfirm").style.display = "none"; }, 3000);
+    }
+
+    function requestCounty(reqLat, reqLng) {
+      const subject = encodeURIComponent("SetScout County Request");
+      const body = encodeURIComponent(`Hi,\n\nI'd like to request municipal permit data for the county at these coordinates:\n\nLat: ${reqLat.toFixed(4)}\nLng: ${reqLng.toFixed(4)}\n\nThank you!`);
+      window.open(`mailto:dj.enviouscultureprod@gmail.com?subject=${subject}&body=${body}`);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    let lat = parseFloat(params.get("lat")) || 25.7617;
+    let lng = parseFloat(params.get("lng")) || -80.1918;
+    const zoom = parseFloat(params.get("zoom")) || 800;
+    let locationName = params.get("name") ? decodeURIComponent(params.get("name")) : "Miami, FL";
+
+    document.getElementById("locationName").textContent = locationName;
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    document.getElementById("shootDate").value = todayStr;
+    let selectedDate = new Date();
+
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      timeline: false,
+      animation: false,
+      shadows: true,
+      geocoder: false,
+    });
+
+    viewer.clock.shouldAnimate = false;
+    viewer.scene.globe.enableLighting = true;
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    Cesium.CesiumTerrainProvider.fromIonAssetId(1).then(function(terrain) {
+      viewer.terrainProvider = terrain;
+      Cesium.createOsmBuildingsAsync().then(function(buildingTileset) {
+        viewer.scene.primitives.add(buildingTileset);
+        buildingTileset.shadows = Cesium.ShadowMode.ENABLED;
+      });
+    });
+
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lng, lat, zoom),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(-45),
+        roll: 0,
+      }
+    });
+
+    function toggleDatePanel() {
+      document.getElementById("datePanel").classList.toggle("open");
+    }
+
+    // Custom search using Nominatim (free, no API key)
+    function doSearch() {
+      const query = document.getElementById("searchInput").value.trim();
+      if (!query) return;
+      const searchedName = query;
+      document.getElementById("searchBtn").textContent = "...";
+
+      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`)
+        .then(res => res.json())
+        .then(results => {
+          document.getElementById("searchBtn").textContent = "Go";
+          if (results.length === 0) {
+            alert("Location not found. Try a different search.");
+            return;
+          }
+          const result = results[0];
+          const newLat = parseFloat(result.lat);
+          const newLng = parseFloat(result.lon);
+          lat = newLat;
+          lng = newLng;
+          locationName = searchedName;
+          document.getElementById("locationName").textContent = locationName;
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(lng, lat, 800),
+            orientation: {
+              heading: Cesium.Math.toRadians(0),
+              pitch: Cesium.Math.toRadians(-45),
+              roll: 0,
+            }
+          });
+          placePin(lat, lng, locationName);
+          buildSunArc(lat, lng, selectedDate);
+          updateKeyTimes(lat, lng, selectedDate);
+          updateSun(parseInt(document.getElementById("scrubber").value));
+          closeMunicPopup();
+        })
+        .catch(() => {
+          document.getElementById("searchBtn").textContent = "Go";
+          alert("Search failed. Check your connection.");
+        });
+    }
+
+    // Allow Enter key to search
+    document.getElementById("searchInput").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") doSearch();
+    });
+
+    let pinEntity = null;
+    let sunArcEntity = null;
+
+    const sunMarker = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lng, lat, 2000),
+      point: {
+        pixelSize: 18,
+        color: Cesium.Color.YELLOW,
+        outlineColor: Cesium.Color.ORANGE,
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      }
+    });
+
+    function placePin(pinLat, pinLng, pinName) {
+      if (pinEntity) viewer.entities.remove(pinEntity);
+      pinEntity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(pinLng, pinLat, 0),
+        point: {
+          pixelSize: 14,
+          color: Cesium.Color.RED,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: pinName,
+          font: "bold 13pt sans-serif",
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        }
+      });
+    }
+
+    viewer.screenSpaceEventHandler.setInputAction(function(click) {
+      const picked = viewer.scene.pick(click.position);
+      if (Cesium.defined(picked) && picked.id === pinEntity) {
+        showMunicPopup(lat, lng);
+      } else if (!document.getElementById("municPopup").contains(document.elementFromPoint(click.position.x, click.position.y))) {
+        closeMunicPopup();
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    function getDateAtMinute(date, minute) {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      d.setMinutes(minute);
+      return d;
+    }
+
+    function formatTime(date) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatDaylight(sunrise, sunset) {
+      const mins = Math.round((sunset - sunrise) / 60000);
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${h}h ${m}m`;
+    }
+
+    function buildSunArc(arcLat, arcLng, date) {
+      if (sunArcEntity) viewer.entities.remove(sunArcEntity);
+      const ARC_HEIGHT = 2000;
+      const pathPositions = [];
+      for (let m = 0; m <= 1440; m += 5) {
+        const d = getDateAtMinute(date, m);
+        const pos = SunCalc.getPosition(d, arcLat, arcLng);
+        if (pos.altitude > 0) {
+          const distance = ARC_HEIGHT / Math.tan(pos.altitude);
+          const az = pos.azimuth;
+          const east = -distance * Math.sin(az);
+          const north = -distance * Math.cos(az);
+          const origin = Cesium.Cartesian3.fromDegrees(arcLng, arcLat, 0);
+          const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
+          const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
+          const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
+          pathPositions.push(worldPos);
+        }
+      }
+      if (pathPositions.length > 1) {
+        sunArcEntity = viewer.entities.add({
+          polyline: {
+            positions: pathPositions,
+            width: 3,
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.3,
+              color: Cesium.Color.ORANGE,
+            }),
+          }
+        });
+      }
+    }
+
+    function updateKeyTimes(kLat, kLng, date) {
+      const sunTimes = SunCalc.getTimes(date, kLat, kLng);
+      document.getElementById("t-sunrise").textContent = formatTime(sunTimes.sunrise);
+      document.getElementById("t-golden1").textContent = formatTime(sunTimes.goldenHour);
+      document.getElementById("t-noon").textContent = formatTime(sunTimes.solarNoon);
+      document.getElementById("t-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
+      document.getElementById("t-sunset").textContent = formatTime(sunTimes.sunset);
+      document.getElementById("dp-sunrise").textContent = formatTime(sunTimes.sunrise);
+      document.getElementById("dp-golden1").textContent = formatTime(sunTimes.goldenHour);
+      document.getElementById("dp-noon").textContent = formatTime(sunTimes.solarNoon);
+      document.getElementById("dp-golden2").textContent = formatTime(sunTimes.goldenHourEnd);
+      document.getElementById("dp-sunset").textContent = formatTime(sunTimes.sunset);
+      document.getElementById("dp-daylight").textContent = formatDaylight(sunTimes.sunrise, sunTimes.sunset);
+    }
+
+    const ARC_HEIGHT = 2000;
+
+    function updateSun(minute) {
+      const d = getDateAtMinute(selectedDate, minute);
+      const pos = SunCalc.getPosition(d, lat, lng);
+      const hours = Math.floor(minute / 60);
+      const mins = minute % 60;
+      const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(selectedDate.getDate()).padStart(2, '0');
+      const yyyy = selectedDate.getFullYear();
+      const timeStr = `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+      document.getElementById("timeDisplay").textContent = `${mm}/${dd}/${yyyy} • ${timeStr}`;
+      const azDeg = ((pos.azimuth * 180 / Math.PI) + 180).toFixed(1);
+      const altDeg = (pos.altitude * 180 / Math.PI).toFixed(1);
+      document.getElementById("sunStats").textContent = `Azimuth: ${azDeg}° | Elevation: ${altDeg}°`;
+      if (pos.altitude > 0) {
+        const distance = ARC_HEIGHT / Math.tan(pos.altitude);
+        const az = pos.azimuth;
+        const east = -distance * Math.sin(az);
+        const north = -distance * Math.cos(az);
+        const origin = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
+        const transform = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
+        const localPos = new Cesium.Cartesian3(east, north, ARC_HEIGHT);
+        const worldPos = Cesium.Matrix4.multiplyByPoint(transform, localPos, new Cesium.Cartesian3());
+        sunMarker.position = new Cesium.ConstantPositionProperty(worldPos);
+        sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.YELLOW);
+      } else {
+        sunMarker.point.color = new Cesium.ConstantProperty(Cesium.Color.GRAY);
+      }
+      viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
+    }
+
+    document.getElementById("shootDate").addEventListener("change", function() {
+      const parts = this.value.split("-");
+      selectedDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      buildSunArc(lat, lng, selectedDate);
+      updateKeyTimes(lat, lng, selectedDate);
+      updateSun(parseInt(document.getElementById("scrubber").value));
+    });
+
+    document.getElementById("scrubber").addEventListener("input", function() {
+      updateSun(parseInt(this.value));
+    });
+
+    placePin(lat, lng, locationName);
+    buildSunArc(lat, lng, selectedDate);
+    updateKeyTimes(lat, lng, selectedDate);
+    updateSun(720);
+  </script>
 </body>
 </html>
