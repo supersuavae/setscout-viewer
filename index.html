@@ -20,6 +20,7 @@
     #keyTimes { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 6px; }
     #keyTimes span { text-align: center; }
     #keyTimes .label { color: #f0a500; }
+
     #dateToggle {
       position: absolute; top: 50%; right: 0; transform: translateY(-50%);
       background: rgba(0,0,0,0.85); color: #f0a500; border: 1px solid #f0a500;
@@ -44,10 +45,81 @@
     #datePanel .sun-summary span { color: #f0a500; font-weight: bold; }
     .divider { border: none; border-top: 1px solid #333; margin: 14px 0; }
     #goldenHourNote { font-size: 11px; color: #888; margin-top: 10px; line-height: 1.6; }
+
+    /* Municipal Intel Popup */
+    #municPopup {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 340px;
+      background: rgba(10,10,10,0.95);
+      color: #fff;
+      border: 1px solid #f0a500;
+      border-radius: 14px;
+      padding: 22px;
+      font-family: sans-serif;
+      z-index: 2000;
+      box-shadow: 0 0 30px rgba(240,165,0,0.2);
+    }
+    #municPopup.visible { display: block; }
+    #municPopup h3 {
+      margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase;
+      letter-spacing: 1px; color: #f0a500;
+    }
+    #municPopup .county-name {
+      font-size: 18px; font-weight: bold; margin-bottom: 14px; color: #fff;
+    }
+    #municPopup .row {
+      display: flex; justify-content: space-between;
+      font-size: 12px; margin-bottom: 8px; line-height: 1.5;
+    }
+    #municPopup .row .label { color: #888; width: 45%; }
+    #municPopup .row .value { color: #fff; width: 55%; text-align: right; }
+    #municPopup .row .value.green { color: #4caf50; }
+    #municPopup .row .value.red { color: #f44336; }
+    #municPopup .row .value.yellow { color: #f0a500; }
+    #municPopup .restrictions {
+      margin-top: 10px; font-size: 11px; color: #aaa;
+      background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px;
+      line-height: 1.6;
+    }
+    #municPopup .restrictions strong { color: #f0a500; }
+    #municPopup .btn-row {
+      display: flex; gap: 8px; margin-top: 14px;
+    }
+    #municPopup .btn {
+      flex: 1; padding: 8px; border-radius: 8px; border: none;
+      font-size: 12px; font-weight: bold; cursor: pointer; text-align: center;
+    }
+    #municPopup .btn-flag {
+      background: rgba(240,165,0,0.15); color: #f0a500; border: 1px solid #f0a500;
+    }
+    #municPopup .btn-close {
+      background: rgba(255,255,255,0.08); color: #aaa; border: 1px solid #444;
+    }
+    #municPopup .btn-request {
+      background: #f0a500; color: #000; font-weight: bold;
+    }
+    #municPopup .not-covered {
+      text-align: center; padding: 10px 0;
+    }
+    #municPopup .not-covered p {
+      color: #aaa; font-size: 13px; margin-bottom: 16px; line-height: 1.6;
+    }
+    #flagConfirm {
+      display: none; font-size: 11px; color: #4caf50;
+      margin-top: 8px; text-align: center;
+    }
+    #municPopup .last-verified {
+      font-size: 10px; color: #555; margin-top: 10px; text-align: right;
+    }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
+
   <div id="ui">
     <h3>☀️ Sun Path — <span id="locationName"></span></h3>
     <div id="timeDisplay">--</div>
@@ -61,6 +133,7 @@
       <span><div class="label">🌃</div><div id="t-sunset">--</div></span>
     </div>
   </div>
+
   <div id="dateToggle" onclick="toggleDatePanel()">📅 SHOOT DATE</div>
   <div id="datePanel">
     <h3>📅 Shoot Date Planner</h3>
@@ -80,9 +153,124 @@
     </div>
   </div>
 
+  <!-- Municipal Intel Popup -->
+  <div id="municPopup">
+    <h3>🏛️ Municipal Intel</h3>
+    <div id="municContent"></div>
+  </div>
+
   <script>
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3YTUzZDI5MC1hYzY0LTRhODctOGI0Mi1jZjM4NjFiYWZlM2QiLCJpZCI6NDE2OTcxLCJpYXQiOjE3NzU5NTgwNjh9.XLiMJOeS6bfl6V-SbpAe3tAAznxBPKheLvYVven0tXM';
 
+    // --- Municipal Data (3 seed counties) ---
+    const municipalData = {
+      "Miami-Dade": {
+        state: "FL",
+        filmOffice: "Miami-Dade Office of Film & Entertainment",
+        contact: "film@miamidade.gov",
+        phone: "(305) 375-3288",
+        permitRequired: true,
+        permitFee: "$150 – $500",
+        processingTime: "5–10 business days",
+        restrictions: ["No filming after 11PM in residential areas", "Drone permits required separately", "Beach locations need Parks dept approval"],
+        lastVerified: "March 2026",
+        bounds: { minLat: 25.1, maxLat: 26.0, minLng: -80.9, maxLng: -80.0 }
+      },
+      "Fulton": {
+        state: "GA",
+        filmOffice: "Georgia Film Office",
+        contact: "gafilm@georgia.org",
+        phone: "(404) 962-4052",
+        permitRequired: true,
+        permitFee: "$200 – $750",
+        processingTime: "3–7 business days",
+        restrictions: ["Street closures require 2 weeks notice", "No pyrotechnics without fire marshal approval", "Historic district locations need additional review"],
+        lastVerified: "March 2026",
+        bounds: { minLat: 33.5, maxLat: 34.1, minLng: -84.9, maxLng: -84.2 }
+      },
+      "Mecklenburg": {
+        state: "NC",
+        filmOffice: "Charlotte Regional Film Commission",
+        contact: "film@charlotteregion.com",
+        phone: "(704) 347-8942",
+        permitRequired: true,
+        permitFee: "$100 – $400",
+        processingTime: "5–7 business days",
+        restrictions: ["Park filming requires Parks & Rec permit", "No amplified sound before 8AM", "Traffic control officer required for street scenes"],
+        lastVerified: "March 2026",
+        bounds: { minLat: 35.0, maxLat: 35.5, minLng: -81.1, maxLng: -80.6 }
+      }
+    };
+
+    function getCountyForLocation(checkLat, checkLng) {
+      for (const [county, data] of Object.entries(municipalData)) {
+        const b = data.bounds;
+        if (checkLat >= b.minLat && checkLat <= b.maxLat &&
+            checkLng >= b.minLng && checkLng <= b.maxLng) {
+          return { county, ...data };
+        }
+      }
+      return null;
+    }
+
+    function showMunicPopup(checkLat, checkLng) {
+      const data = getCountyForLocation(checkLat, checkLng);
+      const popup = document.getElementById("municPopup");
+      const content = document.getElementById("municContent");
+
+      if (data) {
+        content.innerHTML = `
+          <div class="county-name">${data.county} County, ${data.state}</div>
+          <div class="row"><span class="label">Film Office</span><span class="value">${data.filmOffice}</span></div>
+          <div class="row"><span class="label">Phone</span><span class="value">${data.phone}</span></div>
+          <div class="row"><span class="label">Email</span><span class="value">${data.contact}</span></div>
+          <div class="row"><span class="label">Permit Required</span><span class="value ${data.permitRequired ? 'yellow' : 'green'}">${data.permitRequired ? '⚠️ Yes' : '✅ No'}</span></div>
+          <div class="row"><span class="label">Permit Fee</span><span class="value">${data.permitFee}</span></div>
+          <div class="row"><span class="label">Processing Time</span><span class="value">${data.processingTime}</span></div>
+          <div class="restrictions">
+            <strong>⚠️ Restrictions</strong><br/>
+            ${data.restrictions.map(r => `• ${r}`).join('<br/>')}
+          </div>
+          <div class="last-verified">Last verified: ${data.lastVerified}</div>
+          <div class="btn-row">
+            <button class="btn btn-flag" onclick="flagData()">🚩 Flag as Outdated</button>
+            <button class="btn btn-close" onclick="closeMunicPopup()">Close</button>
+          </div>
+          <div id="flagConfirm">✅ Thanks! We'll review this data.</div>
+        `;
+      } else {
+        content.innerHTML = `
+          <div class="not-covered">
+            <div class="county-name">County Not Yet Covered</div>
+            <p>We don't have municipal permit data for this location yet. Help us expand SetScout's coverage by requesting this county.</p>
+            <button class="btn btn-request" onclick="requestCounty(${checkLat}, ${checkLng})">📬 Request This County</button>
+            <br/><br/>
+            <button class="btn btn-close" onclick="closeMunicPopup()">Close</button>
+          </div>
+        `;
+      }
+
+      popup.classList.add("visible");
+    }
+
+    function closeMunicPopup() {
+      document.getElementById("municPopup").classList.remove("visible");
+    }
+
+    function flagData() {
+      document.getElementById("flagConfirm").style.display = "block";
+      setTimeout(() => {
+        document.getElementById("flagConfirm").style.display = "none";
+      }, 3000);
+    }
+
+    function requestCounty(reqLat, reqLng) {
+      const subject = encodeURIComponent("SetScout County Request");
+      const body = encodeURIComponent(`Hi,\n\nI'd like to request municipal permit data for the county at these coordinates:\n\nLat: ${reqLat.toFixed(4)}\nLng: ${reqLng.toFixed(4)}\n\nThank you!`);
+      window.open(`mailto:dj.enviouscultureprod@gmail.com?subject=${subject}&body=${body}`);
+    }
+
+    // --- Cesium Setup ---
     const params = new URLSearchParams(window.location.search);
     let lat = parseFloat(params.get("lat")) || 25.7617;
     let lng = parseFloat(params.get("lng")) || -80.1918;
@@ -166,6 +354,16 @@
         }
       });
     }
+
+    // Click handler — show municipal popup when pin is clicked
+    viewer.screenSpaceEventHandler.setInputAction(function(click) {
+      const picked = viewer.scene.pick(click.position);
+      if (Cesium.defined(picked) && picked.id === pinEntity) {
+        showMunicPopup(lat, lng);
+      } else if (!document.getElementById("municPopup").contains(document.elementFromPoint(click.position.x, click.position.y))) {
+        closeMunicPopup();
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     function getDateAtMinute(date, minute) {
       const d = new Date(date);
@@ -265,7 +463,6 @@
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
     }
 
-    // Only move pin when geocoder search is used — not on pan/zoom
     viewer.geocoder.viewModel.search.afterExecute.addEventListener(function() {
       setTimeout(function() {
         const cameraPos = viewer.camera.positionCartographic;
@@ -279,6 +476,7 @@
         buildSunArc(lat, lng, selectedDate);
         updateKeyTimes(lat, lng, selectedDate);
         updateSun(parseInt(document.getElementById("scrubber").value));
+        closeMunicPopup();
       }, 5000);
     });
 
