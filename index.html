@@ -265,6 +265,23 @@
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
     }
 
+    // Only move pin when geocoder search is used — not on pan/zoom
+    viewer.geocoder.viewModel.search.afterExecute.addEventListener(function() {
+      setTimeout(function() {
+        const cameraPos = viewer.camera.positionCartographic;
+        const newLng = Cesium.Math.toDegrees(cameraPos.longitude);
+        const newLat = Cesium.Math.toDegrees(cameraPos.latitude);
+        lat = newLat;
+        lng = newLng;
+        locationName = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        document.getElementById("locationName").textContent = locationName;
+        placePin(lat, lng, locationName);
+        buildSunArc(lat, lng, selectedDate);
+        updateKeyTimes(lat, lng, selectedDate);
+        updateSun(parseInt(document.getElementById("scrubber").value));
+      }, 3000);
+    });
+
     document.getElementById("shootDate").addEventListener("change", function() {
       const parts = this.value.split("-");
       selectedDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -275,24 +292,6 @@
 
     document.getElementById("scrubber").addEventListener("input", function() {
       updateSun(parseInt(this.value));
-    });
-
-    viewer.camera.moveEnd.addEventListener(function() {
-      const cameraPos = viewer.camera.positionCartographic;
-      const newLng = Cesium.Math.toDegrees(cameraPos.longitude);
-      const newLat = Cesium.Math.toDegrees(cameraPos.latitude);
-      const distLat = Math.abs(newLat - lat);
-      const distLng = Math.abs(newLng - lng);
-      if (distLat > 0.01 || distLng > 0.01) {
-        lat = newLat;
-        lng = newLng;
-        locationName = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        document.getElementById("locationName").textContent = locationName;
-        placePin(lat, lng, locationName);
-        buildSunArc(lat, lng, selectedDate);
-        updateKeyTimes(lat, lng, selectedDate);
-        updateSun(parseInt(document.getElementById("scrubber").value));
-      }
     });
 
     placePin(lat, lng, locationName);
