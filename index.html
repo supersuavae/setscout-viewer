@@ -8,6 +8,46 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
   <style>
     html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+    /* Hide Cesium's built-in geocoder */
+    .cesium-viewer-geocoderContainer { display: none !important; }
+
+    /* Custom search bar */
+    #searchBar {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 1500;
+      width: 420px;
+    }
+    #searchInput {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #f0a500;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      font-size: 14px;
+      font-family: sans-serif;
+      outline: none;
+    }
+    #searchInput::placeholder { color: #888; }
+    #searchBtn {
+      padding: 10px 16px;
+      background: #f0a500;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: sans-serif;
+    }
+    #searchBtn:hover { background: #e09400; }
+
     #ui {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.75); color: #fff; padding: 14px 20px;
@@ -20,6 +60,7 @@
     #keyTimes { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 6px; }
     #keyTimes span { text-align: center; }
     #keyTimes .label { color: #f0a500; }
+
     #dateToggle {
       position: absolute; top: 50%; right: 0; transform: translateY(-50%);
       background: rgba(0,0,0,0.85); color: #f0a500; border: 1px solid #f0a500;
@@ -44,6 +85,7 @@
     #datePanel .sun-summary span { color: #f0a500; font-weight: bold; }
     .divider { border: none; border-top: 1px solid #333; margin: 14px 0; }
     #goldenHourNote { font-size: 11px; color: #888; margin-top: 10px; line-height: 1.6; }
+
     #municPopup {
       display: none; position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%); width: 340px;
@@ -57,19 +99,18 @@
     #municPopup .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; line-height: 1.5; }
     #municPopup .row .label { color: #888; width: 45%; }
     #municPopup .row .value { color: #fff; width: 55%; text-align: right; }
-    #municPopup .row .value.green { color: #4caf50; }
-    #municPopup .row .value.red { color: #f44336; }
     #municPopup .row .value.yellow { color: #f0a500; }
+    #municPopup .row .value.green { color: #4caf50; }
     #municPopup .restrictions {
       margin-top: 10px; font-size: 11px; color: #aaa;
       background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px; line-height: 1.6;
     }
     #municPopup .restrictions strong { color: #f0a500; }
     #municPopup .btn-row { display: flex; gap: 8px; margin-top: 14px; }
-    #municPopup .btn { flex: 1; padding: 8px; border-radius: 8px; border: none; font-size: 12px; font-weight: bold; cursor: pointer; text-align: center; }
+    #municPopup .btn { flex: 1; padding: 8px; border-radius: 8px; border: none; font-size: 12px; font-weight: bold; cursor: pointer; }
     #municPopup .btn-flag { background: rgba(240,165,0,0.15); color: #f0a500; border: 1px solid #f0a500; }
     #municPopup .btn-close { background: rgba(255,255,255,0.08); color: #aaa; border: 1px solid #444; }
-    #municPopup .btn-request { background: #f0a500; color: #000; font-weight: bold; }
+    #municPopup .btn-request { background: #f0a500; color: #000; }
     #municPopup .not-covered { text-align: center; padding: 10px 0; }
     #municPopup .not-covered p { color: #aaa; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
     #flagConfirm { display: none; font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; }
@@ -78,6 +119,13 @@
 </head>
 <body>
   <div id="cesiumContainer"></div>
+
+  <!-- Custom search bar -->
+  <div id="searchBar">
+    <input type="text" id="searchInput" placeholder="🔍 Search any location..." />
+    <button id="searchBtn" onclick="doSearch()">Go</button>
+  </div>
+
   <div id="ui">
     <h3>☀️ Sun Path — <span id="locationName"></span></h3>
     <div id="timeDisplay">--</div>
@@ -91,6 +139,7 @@
       <span><div class="label">🌃</div><div id="t-sunset">--</div></span>
     </div>
   </div>
+
   <div id="dateToggle" onclick="toggleDatePanel()">📅 SHOOT DATE</div>
   <div id="datePanel">
     <h3>📅 Shoot Date Planner</h3>
@@ -109,6 +158,7 @@
       💡 Golden hour gives warm, directional light ideal for dramatic cinematography. Plan wide shots within 30 min of sunrise or sunset.
     </div>
   </div>
+
   <div id="municPopup">
     <h3>🏛️ Municipal Intel</h3>
     <div id="municContent"></div>
@@ -236,6 +286,7 @@
       timeline: false,
       animation: false,
       shadows: true,
+      geocoder: false,
     });
 
     viewer.clock.shouldAnimate = false;
@@ -262,6 +313,53 @@
     function toggleDatePanel() {
       document.getElementById("datePanel").classList.toggle("open");
     }
+
+    // Custom search using Nominatim (free, no API key)
+    function doSearch() {
+      const query = document.getElementById("searchInput").value.trim();
+      if (!query) return;
+      const searchedName = query;
+      document.getElementById("searchBtn").textContent = "...";
+
+      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`)
+        .then(res => res.json())
+        .then(results => {
+          document.getElementById("searchBtn").textContent = "Go";
+          if (results.length === 0) {
+            alert("Location not found. Try a different search.");
+            return;
+          }
+          const result = results[0];
+          const newLat = parseFloat(result.lat);
+          const newLng = parseFloat(result.lon);
+          lat = newLat;
+          lng = newLng;
+          locationName = searchedName;
+          document.getElementById("locationName").textContent = locationName;
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(lng, lat, 800),
+            orientation: {
+              heading: Cesium.Math.toRadians(0),
+              pitch: Cesium.Math.toRadians(-45),
+              roll: 0,
+            }
+          });
+          placePin(lat, lng, locationName);
+          buildSunArc(lat, lng, selectedDate);
+          updateKeyTimes(lat, lng, selectedDate);
+          updateSun(parseInt(document.getElementById("scrubber").value));
+          closeMunicPopup();
+        })
+        .catch(() => {
+          document.getElementById("searchBtn").textContent = "Go";
+          alert("Search failed. Check your connection.");
+        });
+    }
+
+    // Allow Enter key to search
+    document.getElementById("searchInput").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") doSearch();
+    });
 
     let pinEntity = null;
     let sunArcEntity = null;
@@ -410,37 +508,6 @@
       }
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
     }
-
-    // Capture search name on keydown before Cesium overwrites with "Searching..."
-    let pendingSearchName = "";
-    setTimeout(function() {
-      const geocoderInput = document.querySelector(".cesium-geocoder-input");
-      if (geocoderInput) {
-        geocoderInput.addEventListener("keydown", function(e) {
-          if (e.key === "Enter") {
-            pendingSearchName = this.value.trim();
-          }
-        });
-      }
-    }, 1000);
-
-    viewer.geocoder.viewModel.search.afterExecute.addEventListener(function() {
-      setTimeout(function() {
-        const cameraPos = viewer.camera.positionCartographic;
-        const newLng = Cesium.Math.toDegrees(cameraPos.longitude);
-        const newLat = Cesium.Math.toDegrees(cameraPos.latitude);
-        lat = newLat;
-        lng = newLng;
-        locationName = pendingSearchName !== "" ? pendingSearchName : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        pendingSearchName = "";
-        document.getElementById("locationName").textContent = locationName;
-        placePin(lat, lng, locationName);
-        buildSunArc(lat, lng, selectedDate);
-        updateKeyTimes(lat, lng, selectedDate);
-        updateSun(parseInt(document.getElementById("scrubber").value));
-        closeMunicPopup();
-      }, 5000);
-    });
 
     document.getElementById("shootDate").addEventListener("change", function() {
       const parts = this.value.split("-");
