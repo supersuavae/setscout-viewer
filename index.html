@@ -8,43 +8,20 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
   <style>
     html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
-
-    /* Hide Cesium's built-in geocoder */
     .cesium-viewer-geocoderContainer { display: none !important; }
 
-    /* Custom search bar */
     #searchBar {
-      position: absolute;
-      top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      z-index: 1500;
-      width: 420px;
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; z-index: 1500; width: 420px;
     }
     #searchInput {
-      flex: 1;
-      padding: 10px 14px;
-      border-radius: 8px;
-      border: 1px solid #f0a500;
-      background: rgba(0,0,0,0.85);
-      color: #fff;
-      font-size: 14px;
-      font-family: sans-serif;
-      outline: none;
+      flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #f0a500;
+      background: rgba(0,0,0,0.85); color: #fff; font-size: 14px; font-family: sans-serif; outline: none;
     }
     #searchInput::placeholder { color: #888; }
     #searchBtn {
-      padding: 10px 16px;
-      background: #f0a500;
-      color: #000;
-      border: none;
-      border-radius: 8px;
-      font-weight: bold;
-      font-size: 14px;
-      cursor: pointer;
-      font-family: sans-serif;
+      padding: 10px 16px; background: #f0a500; color: #000; border: none;
+      border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; font-family: sans-serif;
     }
     #searchBtn:hover { background: #e09400; }
 
@@ -115,12 +92,92 @@
     #municPopup .not-covered p { color: #aaa; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
     #flagConfirm { display: none; font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; }
     #municPopup .last-verified { font-size: 10px; color: #555; margin-top: 10px; text-align: right; }
+
+    /* Scene Link Button */
+    #sceneLinkBtn {
+      display: none;
+      position: absolute;
+      z-index: 1800;
+      background: rgba(0,0,0,0.9);
+      border: 1px solid #4fc3f7;
+      border-radius: 10px;
+      padding: 6px 12px;
+      color: #4fc3f7;
+      font-family: sans-serif;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #sceneLinkBtn:hover { background: rgba(79,195,247,0.15); }
+
+    /* Scene Modal */
+    #sceneModal {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 360px;
+      background: rgba(10,10,10,0.97);
+      color: #fff;
+      border: 1px solid #4fc3f7;
+      border-radius: 14px;
+      padding: 24px;
+      font-family: sans-serif;
+      z-index: 3000;
+      box-shadow: 0 0 30px rgba(79,195,247,0.2);
+    }
+    #sceneModal.visible { display: block; }
+    #sceneModal h3 { margin: 0 0 16px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #4fc3f7; }
+    #sceneModal label { font-size: 12px; color: #aaa; display: block; margin-bottom: 5px; margin-top: 12px; }
+    #sceneModal input, #sceneModal textarea {
+      width: 100%; padding: 8px 10px; border-radius: 6px;
+      border: 1px solid #4fc3f7; background: #111; color: #fff;
+      font-size: 13px; box-sizing: border-box; font-family: sans-serif;
+    }
+    #sceneModal textarea { height: 70px; resize: none; }
+    #sceneModal .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+    #sceneModal .btn { flex: 1; padding: 9px; border-radius: 8px; border: none; font-size: 13px; font-weight: bold; cursor: pointer; }
+    #sceneModal .btn-save { background: #4fc3f7; color: #000; }
+    #sceneModal .btn-cancel { background: rgba(255,255,255,0.08); color: #aaa; border: 1px solid #444; }
+
+    /* Scene tag display on pin */
+    #sceneTag {
+      display: none;
+      position: absolute;
+      z-index: 1700;
+      background: rgba(79,195,247,0.15);
+      border: 1px solid #4fc3f7;
+      border-radius: 8px;
+      padding: 5px 10px;
+      color: #4fc3f7;
+      font-family: sans-serif;
+      font-size: 11px;
+      max-width: 200px;
+      pointer-events: none;
+    }
+
+    /* Saved scenes list in modal */
+    #savedScenes { margin-top: 14px; }
+    #savedScenes .scene-item {
+      background: rgba(79,195,247,0.08);
+      border: 1px solid #1a3a4a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    #savedScenes .scene-item .scene-title { color: #4fc3f7; font-weight: bold; margin-bottom: 3px; }
+    #savedScenes .scene-item .scene-note { color: #aaa; }
+    #savedScenes .scene-item .scene-remove {
+      float: right; color: #f44336; cursor: pointer; font-size: 11px; margin-top: 2px;
+    }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
 
-  <!-- Custom search bar -->
   <div id="searchBar">
     <input type="text" id="searchInput" placeholder="🔍 Search any location..." />
     <button id="searchBtn" onclick="doSearch()">Go</button>
@@ -162,6 +219,29 @@
   <div id="municPopup">
     <h3>🏛️ Municipal Intel</h3>
     <div id="municContent"></div>
+  </div>
+
+  <!-- Scene Link Button (floats near pin) -->
+  <div id="sceneLinkBtn" onclick="openSceneModal()">🎬 Link Scene</div>
+
+  <!-- Scene Tag (shows linked scene near pin) -->
+  <div id="sceneTag"></div>
+
+  <!-- Scene Modal -->
+  <div id="sceneModal">
+    <h3>🎬 Scene Linking — <span id="sceneLocName"></span></h3>
+    <div id="savedScenes"></div>
+    <hr class="divider" />
+    <label>Scene Number</label>
+    <input type="text" id="sceneNumber" placeholder="e.g. 12" />
+    <label>Scene Name</label>
+    <input type="text" id="sceneName" placeholder="e.g. The Chase" />
+    <label>Production Note</label>
+    <textarea id="sceneNote" placeholder="e.g. Need overcast light, avoid midday sun, wide establishing shot from north side"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-save" onclick="saveScene()">Save Scene Tag</button>
+      <button class="btn btn-cancel" onclick="closeSceneModal()">Cancel</button>
+    </div>
   </div>
 
   <script>
@@ -270,6 +350,78 @@
       window.open(`mailto:dj.enviouscultureprod@gmail.com?subject=${subject}&body=${body}`);
     }
 
+    // Scene data stored in memory
+    let scenesByLocation = {};
+
+    function getLocationKey() {
+      return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+    }
+
+    function openSceneModal() {
+      document.getElementById("sceneLocName").textContent = locationName;
+      document.getElementById("sceneNumber").value = "";
+      document.getElementById("sceneName").value = "";
+      document.getElementById("sceneNote").value = "";
+      renderSavedScenes();
+      document.getElementById("sceneModal").classList.add("visible");
+      closeMunicPopup();
+    }
+
+    function closeSceneModal() {
+      document.getElementById("sceneModal").classList.remove("visible");
+    }
+
+    function saveScene() {
+      const num = document.getElementById("sceneNumber").value.trim();
+      const name = document.getElementById("sceneName").value.trim();
+      const note = document.getElementById("sceneNote").value.trim();
+      if (!num && !name) { alert("Please enter at least a scene number or name."); return; }
+      const key = getLocationKey();
+      if (!scenesByLocation[key]) scenesByLocation[key] = [];
+      scenesByLocation[key].push({ num, name, note, location: locationName, lat, lng });
+      renderSavedScenes();
+      updateSceneTag();
+      document.getElementById("sceneNumber").value = "";
+      document.getElementById("sceneName").value = "";
+      document.getElementById("sceneNote").value = "";
+    }
+
+    function removeScene(key, index) {
+      scenesByLocation[key].splice(index, 1);
+      renderSavedScenes();
+      updateSceneTag();
+    }
+
+    function renderSavedScenes() {
+      const key = getLocationKey();
+      const scenes = scenesByLocation[key] || [];
+      const container = document.getElementById("savedScenes");
+      if (scenes.length === 0) {
+        container.innerHTML = `<div style="color:#555;font-size:12px;margin-bottom:8px;">No scenes linked to this location yet.</div>`;
+        return;
+      }
+      container.innerHTML = scenes.map((s, i) => `
+        <div class="scene-item">
+          <span class="scene-remove" onclick="removeScene('${key}', ${i})">✕ Remove</span>
+          <div class="scene-title">Scene ${s.num}${s.name ? ' — ' + s.name : ''}</div>
+          ${s.note ? `<div class="scene-note">${s.note}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function updateSceneTag() {
+      const key = getLocationKey();
+      const scenes = scenesByLocation[key] || [];
+      const tag = document.getElementById("sceneTag");
+      if (scenes.length > 0) {
+        const first = scenes[0];
+        tag.textContent = `🎬 Scene ${first.num}${first.name ? ' — ' + first.name : ''}${scenes.length > 1 ? ` +${scenes.length - 1} more` : ''}`;
+        tag.style.display = "block";
+      } else {
+        tag.style.display = "none";
+      }
+    }
+
     const params = new URLSearchParams(window.location.search);
     let lat = parseFloat(params.get("lat")) || 25.7617;
     let lng = parseFloat(params.get("lng")) || -80.1918;
@@ -314,55 +466,9 @@
       document.getElementById("datePanel").classList.toggle("open");
     }
 
-    // Custom search using Nominatim (free, no API key)
-    function doSearch() {
-      const query = document.getElementById("searchInput").value.trim();
-      if (!query) return;
-      const searchedName = query;
-      document.getElementById("searchBtn").textContent = "...";
-
-      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`)
-        .then(res => res.json())
-        .then(results => {
-          document.getElementById("searchBtn").textContent = "Go";
-          if (results.length === 0) {
-            alert("Location not found. Try a different search.");
-            return;
-          }
-          const result = results[0];
-          const newLat = parseFloat(result.lat);
-          const newLng = parseFloat(result.lon);
-          lat = newLat;
-          lng = newLng;
-          locationName = searchedName;
-          document.getElementById("locationName").textContent = locationName;
-          viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(lng, lat, 800),
-            orientation: {
-              heading: Cesium.Math.toRadians(0),
-              pitch: Cesium.Math.toRadians(-45),
-              roll: 0,
-            }
-          });
-          placePin(lat, lng, locationName);
-          buildSunArc(lat, lng, selectedDate);
-          updateKeyTimes(lat, lng, selectedDate);
-          updateSun(parseInt(document.getElementById("scrubber").value));
-          closeMunicPopup();
-        })
-        .catch(() => {
-          document.getElementById("searchBtn").textContent = "Go";
-          alert("Search failed. Check your connection.");
-        });
-    }
-
-    // Allow Enter key to search
-    document.getElementById("searchInput").addEventListener("keydown", function(e) {
-      if (e.key === "Enter") doSearch();
-    });
-
     let pinEntity = null;
     let sunArcEntity = null;
+    let pinScreenPos = { x: 0, y: 0 };
 
     const sunMarker = viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(lng, lat, 2000),
@@ -400,16 +506,87 @@
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         }
       });
+      updateSceneTag();
     }
+
+    // Update floating button and tag position as camera moves
+    viewer.scene.postRender.addEventListener(function() {
+      if (!pinEntity) return;
+      const pinPos = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
+      const screenPos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, pinPos);
+      if (screenPos) {
+        pinScreenPos = screenPos;
+        const btn = document.getElementById("sceneLinkBtn");
+        if (btn.style.display === "block") {
+          btn.style.left = (screenPos.x - btn.offsetWidth / 2) + "px";
+          btn.style.top = (screenPos.y - 60) + "px";
+        }
+        const tag = document.getElementById("sceneTag");
+        if (tag.style.display === "block") {
+          tag.style.left = (screenPos.x - tag.offsetWidth / 2) + "px";
+          tag.style.top = (screenPos.y - 90) + "px";
+        }
+      }
+    });
 
     viewer.screenSpaceEventHandler.setInputAction(function(click) {
       const picked = viewer.scene.pick(click.position);
+      const municEl = document.getElementById("municPopup");
+      const sceneEl = document.getElementById("sceneModal");
+      const clickedEl = document.elementFromPoint(click.position.x, click.position.y);
+
       if (Cesium.defined(picked) && picked.id === pinEntity) {
+        // Show scene link button near pin
+        const btn = document.getElementById("sceneLinkBtn");
+        btn.style.display = "block";
+        btn.style.left = (click.position.x - btn.offsetWidth / 2) + "px";
+        btn.style.top = (click.position.y - 60) + "px";
+        // Show municipal popup
         showMunicPopup(lat, lng);
-      } else if (!document.getElementById("municPopup").contains(document.elementFromPoint(click.position.x, click.position.y))) {
-        closeMunicPopup();
+      } else {
+        if (!municEl.contains(clickedEl) && !sceneEl.contains(clickedEl)) {
+          closeMunicPopup();
+          document.getElementById("sceneLinkBtn").style.display = "none";
+        }
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    function doSearch() {
+      const query = document.getElementById("searchInput").value.trim();
+      if (!query) return;
+      const searchedName = query;
+      document.getElementById("searchBtn").textContent = "...";
+      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`)
+        .then(res => res.json())
+        .then(results => {
+          document.getElementById("searchBtn").textContent = "Go";
+          if (results.length === 0) { alert("Location not found. Try a different search."); return; }
+          const result = results[0];
+          lat = parseFloat(result.lat);
+          lng = parseFloat(result.lon);
+          locationName = searchedName;
+          document.getElementById("locationName").textContent = locationName;
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(lng, lat, 800),
+            orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-45), roll: 0 }
+          });
+          placePin(lat, lng, locationName);
+          buildSunArc(lat, lng, selectedDate);
+          updateKeyTimes(lat, lng, selectedDate);
+          updateSun(parseInt(document.getElementById("scrubber").value));
+          closeMunicPopup();
+          document.getElementById("sceneLinkBtn").style.display = "none";
+          closeSceneModal();
+        })
+        .catch(() => {
+          document.getElementById("searchBtn").textContent = "Go";
+          alert("Search failed. Check your connection.");
+        });
+    }
+
+    document.getElementById("searchInput").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") doSearch();
+    });
 
     function getDateAtMinute(date, minute) {
       const d = new Date(date);
