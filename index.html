@@ -463,7 +463,7 @@
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
     }
 
-    viewer.geocoder.viewModel.search.afterExecute.addEventListener(function() {
+   viewer.geocoder.viewModel.search.afterExecute.addEventListener(function() {
       // Grab text directly from the input element before Cesium clears it
       const searchInput = document.querySelector(".cesium-geocoder-input");
       const searchedName = searchInput ? searchInput.value.trim() : "";
@@ -481,7 +481,7 @@
         updateSun(parseInt(document.getElementById("scrubber").value));
         closeMunicPopup();
       }, 5000);
-    });
+    }); 
 
     document.getElementById("shootDate").addEventListener("change", function() {
       const parts = this.value.split("-");
