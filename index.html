@@ -464,13 +464,15 @@
     }
 
     viewer.geocoder.viewModel.search.afterExecute.addEventListener(function() {
+      // Grab the search text before the timeout clears it
+      const searchedName = viewer.geocoder.viewModel.searchText || "";
       setTimeout(function() {
         const cameraPos = viewer.camera.positionCartographic;
         const newLng = Cesium.Math.toDegrees(cameraPos.longitude);
         const newLat = Cesium.Math.toDegrees(cameraPos.latitude);
         lat = newLat;
         lng = newLng;
-        locationName = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        locationName = searchedName.trim() !== "" ? searchedName.trim() : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
         document.getElementById("locationName").textContent = locationName;
         placePin(lat, lng, locationName);
         buildSunArc(lat, lng, selectedDate);
