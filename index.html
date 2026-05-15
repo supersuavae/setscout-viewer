@@ -153,7 +153,7 @@
   <div id="cesiumContainer"></div>
 
   <div id="searchBar">
-    <input type="text" id="searchInput" placeholder="🔍 Search any Florida location..." />
+    <input type="text" id="searchInput" placeholder="🔍 Address, landmark, or zip code..." />
     <button id="searchBtn" onclick="doSearch()">Go</button>
   </div>
 
@@ -291,18 +291,25 @@
     };
 
     // Reverse geocode to get Florida county from coordinates
-    async function getFloridaCounty(checkLat, checkLng) {
+  async function getFloridaCounty(checkLat, checkLng) {
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${checkLat}&lon=${checkLng}&format=json&addressdetails=1`
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${checkLng},${checkLat}.json?access_token=pk.eyJ1Ijoic3VwZXJzdWF2YWUyMiIsImEiOiJjbXA2ZWVhYTkxbW1qMnFweWxrZHo5bDRjIn0.5y-HXoD_v5O77Knbk2vtBQ&types=region,district`
         );
         const data = await res.json();
-        const state = data.address?.state;
-        const county = data.address?.county;
-        if (state !== "Florida") return { inFlorida: false, county: null };
-        // Clean county name — remove " County" suffix
-        const cleanCounty = county ? county.replace(" County", "").trim() : null;
-        return { inFlorida: true, county: cleanCounty };
+        if (!data.features || data.features.length === 0) return { inFlorida: false, county: null };
+        
+        let county = null;
+        let inFlorida = false;
+
+        for (const feature of data.features) {
+          const context = [feature, ...(feature.context || [])];
+          for (const c of context) {
+            if (c.id?.startsWith("region") && c.text === "Florida") inFlorida = true;
+            if (c.id?.startsWith("district")) county = c.text.replace(" County", "").trim();
+          }
+        }
+        return { inFlorida, county };
       } catch (e) {
         return { inFlorida: false, county: null };
       }
@@ -537,21 +544,17 @@ function doSearch() {
       const query = document.getElementById("searchInput").value.trim();
       if (!query) return;
       document.getElementById("searchBtn").textContent = "...";
-      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=us&addressdetails=1`)
+      fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=pk.eyJ1Ijoic3VwZXJzdWF2YWUyMiIsImEiOiJjbXA2ZWVhYTkxbW1qMnFweWxrZHo5bDRjIn0.5y-HXoD_v5O77Knbk2vtBQ&country=us&limit=1`)
         .then(res => res.json())
-        .then(async results => {
+        .then(data => {
           document.getElementById("searchBtn").textContent = "Go";
-          if (results.length === 0) {
-            const retryRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Florida')}&format=json&limit=1&countrycodes=us`);
-            results = await retryRes.json();
-            if (results.length === 0) {
-              alert("Location not found. Try adding a city name (e.g. '123 Main St, Tampa').");
-              return;
-            }
+          if (!data.features || data.features.length === 0) {
+            alert("Location not found. Try using a zip code instead of city name, or search a nearby landmark.");
+            return;
           }
-          const result = results[0];
-          lat = parseFloat(result.lat);
-          lng = parseFloat(result.lon);
+          const result = data.features[0];
+          lng = result.center[0];
+          lat = result.center[1];
           locationName = query;
           document.getElementById("locationName").textContent = locationName;
           viewer.camera.flyTo({
