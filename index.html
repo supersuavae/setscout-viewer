@@ -493,7 +493,7 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       const note = document.getElementById("sceneNote").value.trim();
       if (!num && !name) { alert("Please enter at least a scene number or name."); return; }
 
-      const newTag = { num, name, note, location: locationName };
+      const newTag = { scene_number: num, scene_name: name, note: note, location: locationName };
       sceneTags.push(newTag);
       renderSavedScenes();
       updateSceneTag();
@@ -530,20 +530,18 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
         return;
       }
       container.innerHTML = sceneTags.map((s, i) => `
-        <div class="scene-item">
-          <span class="scene-remove" onclick="removeScene(${i})">✕ Remove</span>
-          <div class="scene-title">Scene ${s.num}${s.name ? ' — ' + s.name : ''}</div>
-          ${s.note ? `<div class="scene-note">${s.note}</div>` : ''}
-        </div>
-      `).join('');
-    }
+  <div class="scene-item">
+    <span class="scene-remove" onclick="removeScene(${i})">✕ Remove</span>
+    <div class="scene-title">Scene ${s.scene_number || s.num}${(s.scene_name || s.name) ? ' — ' + (s.scene_name || s.name) : ''}</div>
+    ${s.note ? `<div class="scene-note">${s.note}</div>` : ''}
+  </div>
+`).join('');
 
     function updateSceneTag() {
       const tag = document.getElementById("sceneTag");
       if (sceneTags.length > 0) {
         const first = sceneTags[0];
-        tag.textContent = `🎬 Scene ${first.num}${first.name ? ' — ' + first.name : ''}${sceneTags.length > 1 ? ` +${sceneTags.length - 1} more` : ''}`;
-        tag.style.display = "block";
+tag.textContent = `🎬 Scene ${first.scene_number || first.num}${(first.scene_name || first.name) ? ' — ' + (first.scene_name || first.name) : ''}${sceneTags.length > 1 ? ` +${sceneTags.length - 1} more` : ''}`;
       } else {
         tag.style.display = "none";
       }
