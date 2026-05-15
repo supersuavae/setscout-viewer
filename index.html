@@ -93,7 +93,6 @@
     #municPopup .not-covered p { color: #aaa; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
     #flagConfirm { display: none; font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; }
     #municPopup .last-verified { font-size: 10px; color: #555; margin-top: 10px; text-align: right; }
-    #municLoading { text-align: center; color: #f0a500; font-size: 13px; padding: 20px 0; }
 
     #sceneLinkBtn {
       display: none; position: absolute; z-index: 1800;
@@ -110,6 +109,7 @@
       background: rgba(10,10,10,0.97); color: #fff;
       border: 1px solid #4fc3f7; border-radius: 14px; padding: 24px;
       font-family: sans-serif; z-index: 3000; box-shadow: 0 0 30px rgba(79,195,247,0.2);
+      max-height: 80vh; overflow-y: auto;
     }
     #sceneModal.visible { display: block; }
     #sceneModal h3 { margin: 0 0 16px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #4fc3f7; }
@@ -124,6 +124,8 @@
     #sceneModal .btn { flex: 1; padding: 9px; border-radius: 8px; border: none; font-size: 13px; font-weight: bold; cursor: pointer; }
     #sceneModal .btn-save { background: #4fc3f7; color: #000; }
     #sceneModal .btn-cancel { background: rgba(255,255,255,0.08); color: #aaa; border: 1px solid #444; }
+    #sceneModal .sync-status { font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; display: none; }
+    #sceneModal .sync-error { font-size: 11px; color: #f44336; margin-top: 8px; text-align: center; display: none; }
 
     #sceneTag {
       display: none; position: absolute; z-index: 1700;
@@ -141,11 +143,11 @@
     #savedScenes .scene-item .scene-note { color: #aaa; }
     #savedScenes .scene-item .scene-remove { float: right; color: #f44336; cursor: pointer; font-size: 11px; margin-top: 2px; }
 
-    #notFloridaMsg {
-      display: none; position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
-      background: rgba(240,165,0,0.15); border: 1px solid #f0a500;
-      border-radius: 10px; padding: 10px 18px; color: #f0a500;
-      font-family: sans-serif; font-size: 13px; z-index: 1500; text-align: center;
+    #syncBadge {
+      display: none; position: absolute; top: 14px; right: 60px;
+      background: rgba(79,195,247,0.15); border: 1px solid #4fc3f7;
+      border-radius: 8px; padding: 6px 12px; color: #4fc3f7;
+      font-family: sans-serif; font-size: 11px; z-index: 1500;
     }
   </style>
 </head>
@@ -157,7 +159,7 @@
     <button id="searchBtn" onclick="doSearch()">Go</button>
   </div>
 
-  <div id="notFloridaMsg">⚠️ Municipal Intel is currently Florida-only. Showing sun data only.</div>
+  <div id="syncBadge">🔗 Linked to SetScout</div>
 
   <div id="ui">
     <h3>☀️ Sun Path — <span id="locationName"></span></h3>
@@ -202,6 +204,7 @@
 
   <div id="sceneModal">
     <h3>🎬 Scene Linking — <span id="sceneLocName"></span></h3>
+    <div id="syncIndicator" style="font-size:11px;color:#4fc3f7;margin-bottom:8px;display:none;">🔗 Synced with SetScout database</div>
     <div id="savedScenes"></div>
     <hr class="divider" />
     <label>Scene Number</label>
@@ -214,94 +217,117 @@
       <button class="btn btn-save" onclick="saveScene()">Save Scene Tag</button>
       <button class="btn btn-cancel" onclick="closeSceneModal()">Cancel</button>
     </div>
+    <div class="sync-status" id="syncStatus">✅ Saved to SetScout</div>
+    <div class="sync-error" id="syncError">⚠️ Saved locally only — not connected to SetScout</div>
   </div>
 
   <script>
-    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3YTUzZDI5MC1hYzY0LTRhODctOGI0Mi1jZjM4NjFiYWZlM2QiLCJpZCI6NDE2OTcxLCJpYXQiOjE3NzU5NTgwNjh9.XLiMJOeS6bfl6V-SbpAe3tAAznxBPKheLvYVven0tXM';
+    // --- Base44 API Config ---
+    const BASE44_APP_ID = "6a074ecd37009e621891aad3";
+    const BASE44_API_KEY = "b8c8363ef186414b98e50c6755ea2293";
+    const BASE44_BASE_URL = `https://set-scout-pro.base44.app/api/apps/${BASE44_APP_ID}/entities`;
 
-    // Florida Film Commission Data — all 67 counties
+    async function fetchLocationFromBase44(locationId) {
+      try {
+        const res = await fetch(`${BASE44_BASE_URL}/Location/${locationId}`, {
+          headers: { "api_key": BASE44_API_KEY, "Content-Type": "application/json" }
+        });
+        if (!res.ok) return null;
+        return await res.json();
+      } catch (e) { return null; }
+    }
+
+    async function saveSceneTagsToBase44(locationId, sceneTags) {
+      try {
+        const res = await fetch(`${BASE44_BASE_URL}/Location/${locationId}`, {
+          method: "PUT",
+          headers: { "api_key": BASE44_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ scene_tags: sceneTags })
+        });
+        return res.ok;
+      } catch (e) { return false; }
+    }
+
+    // Florida Municipal Data
     const floridaFilmData = {
-      "Alachua": { filmOffice: "Alachua County Visitors & Convention Bureau", phone: "(352) 374-5231", contact: "visitgainesville.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Public property requires permit", "Contact commission for private property rules"] },
-      "Baker": { filmOffice: "Baker County Chamber of Commerce", phone: "(904) 259-6433", contact: "bakerchamberfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Bay": { filmOffice: "Panama City Film Office", phone: "(850) 215-3425", contact: "visitpanamacitybeach.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need additional approval", "Drone permits required separately"] },
-      "Bradford": { filmOffice: "North Florida Regional Chamber of Commerce", phone: "(904) 964-5278", contact: "starkefl.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Brevard": { filmOffice: "Space Coast Florida", phone: "(321) 433-4470", contact: "visitspacecoast.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Kennedy Space Center requires federal permits", "Beach locations need Parks approval"] },
-      "Broward": { filmOffice: "Film Lauderdale", phone: "(954) 357-6990", contact: "filmlauderdale.org", permitFee: "FREE (special services billed separately)", processingTime: "3 business days (2 weeks for stunts/road closures)", restrictions: ["COI required ($1M minimum)", "Covers 31 municipalities in one application", "Road closures require 2 weeks minimum notice", "Drone and pyro permits required separately"] },
-      "Calhoun": { filmOffice: "Calhoun County Chamber of Commerce", phone: "(850) 674-4519", contact: "calhounco.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Charlotte": { filmOffice: "Punta Gorda/Englewood Beach Visitor & Convention Bureau", phone: "(941) 743-1900", contact: "charlotteharbordestinations.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need additional permits", "Drone permits required separately"] },
-      "Citrus": { filmOffice: "Discover Crystal River", phone: "(352) 563-0450", contact: "discovercrystalriverfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Water/spring locations may need DEP permit", "Manatee protection zones restrict some filming"] },
-      "Clay": { filmOffice: "Clay County Board of Commissioners", phone: "(904) 269-6300", contact: "claycountygov.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Collier": { filmOffice: "Florida's Paradise Coast Film Commission", phone: "(239) 252-2384", contact: "paradisecoast.com", permitFee: "FREE", processingTime: "24–48 hours", restrictions: ["COI required ($1M minimum)", "Everglades filming needs federal permit", "Beach permits through Parks dept", "Drone restrictions near airports"] },
-      "Columbia": { filmOffice: "Columbia County Tourism Office", phone: "(386) 758-1312", contact: "lakecitycvb.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact office for full requirements"] },
-      "Miami-Dade": { filmOffice: "Miami-Dade Office of Film & Entertainment", phone: "(305) 375-3288", contact: "film@miamidade.gov", permitFee: "$150 – $500", processingTime: "3–5 business days", restrictions: ["No filming after 11PM in residential areas", "Drone permits required separately ($100 fee)", "Beach locations need Parks dept approval", "Street closures require police coordination"] },
-      "DeSoto": { filmOffice: "DeSoto County Chamber of Commerce", phone: "(863) 494-4033", contact: "desotochamber.net", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Dixie": { filmOffice: "Dixie County Chamber of Commerce", phone: "(352) 498-5454", contact: "dixiecounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Duval": { filmOffice: "Jacksonville Film & Television Office", phone: "(904) 630-1905", contact: "filmjax.com", permitFee: "FREE", processingTime: "10 business days", restrictions: ["COI required ($1M liability + $100K workers comp)", "Road closure permit required if traffic impacted", "No drone filming within 5 nautical miles of airport", "Must notify neighborhood associations for residential shoots"] },
-      "Escambia": { filmOffice: "Visit Pensacola", phone: "(850) 434-1234", contact: "visitpensacola.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need additional approval", "Military base proximity may restrict some locations"] },
-      "Flagler": { filmOffice: "City of Bunnell / Palm Coast Film Office", phone: "(386) 313-4170", contact: "palmcoastgov.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Beach locations need Parks approval"] },
-      "Franklin": { filmOffice: "Apalachicola Bay Chamber of Commerce", phone: "(850) 653-9419", contact: "apalachicolabay.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Oyster bed areas restrict some water filming", "State park locations need DEP permit"] },
-      "Gadsden": { filmOffice: "Gadsden County Chamber of Commerce", phone: "(850) 627-9231", contact: "gadsdenchamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Gilchrist": { filmOffice: "Gilchrist Board of Commissioners", phone: "(352) 463-3169", contact: "gilchristcounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Spring locations may need DEP permit"] },
-      "Glades": { filmOffice: "Glades County Economic Development", phone: "(863) 946-6000", contact: "gladescounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Gulf": { filmOffice: "Gulf County Tourism Office", phone: "(850) 227-1223", contact: "visitgulf.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Beach locations need additional approval"] },
-      "Hamilton": { filmOffice: "Hamilton County Government", phone: "(386) 792-1288", contact: "hamiltoncountyflorida.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Hardee": { filmOffice: "Hardee Board of County Commissioners", phone: "(863) 773-9430", contact: "hardeecounty.net", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Hendry": { filmOffice: "Hendry County Government", phone: "(863) 675-5220", contact: "hendrycountyfl.gov", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Hernando": { filmOffice: "Florida's Adventure Coast / Brooksville Tourism", phone: "(352) 754-4405", contact: "floridasadventurecoast.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Weeki Wachee Springs needs separate permit", "Contact office for full requirements"] },
-      "Highlands": { filmOffice: "Visit Sebring Tourist Development Council", phone: "(863) 402-6909", contact: "visitsebringusflorida.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Raceway locations require direct negotiation"] },
-      "Hillsborough": { filmOffice: "Film Tampa Bay", phone: "(813) 223-1111", contact: "filmtampabay.com", permitFee: "FREE (special services billed separately)", processingTime: "5 business days (10 days for stunts/road closures)", restrictions: ["COI required naming county/city as additional insured", "Port Tampa Bay requires separate permit", "Crews of 5 or fewer exempt in county parks only", "Street closures require 10 business days minimum"] },
-      "Holmes": { filmOffice: "Holmes County Board of County Commissioners", phone: "(850) 547-1100", contact: "holmescountyfl.gov", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Indian River": { filmOffice: "Indian River Chamber of Commerce / Vero Beach Chamber", phone: "(772) 567-3491", contact: "indianriverchamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need Parks approval", "Drone restrictions near airport"] },
-      "Jackson": { filmOffice: "Jackson County Tourist Development Council", phone: "(850) 482-8060", contact: "jacksoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact TDC for full requirements"] },
-      "Jefferson": { filmOffice: "Jefferson County Government", phone: "(850) 342-0218", contact: "jeffersoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Lafayette": { filmOffice: "Lafayette County Chamber of Commerce", phone: "(386) 294-2705", contact: "lafayettecountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Lake": { filmOffice: "Metro Orlando Film & Entertainment Commission", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE in most jurisdictions", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Off-duty officers billed separately", "Contact commission for jurisdiction-specific rules"] },
-      "Lee": { filmOffice: "Lee County Film Office / Fort Myers & Sanibel Film Office", phone: "(239) 338-3500", contact: "leegov.com/film", permitFee: "FREE", processingTime: "3 business days", restrictions: ["COI required ($1M minimum)", "Ding Darling Wildlife Refuge needs federal permit", "Fort Myers Beach has separate requirements", "Drone restrictions near Page Field airport"] },
-      "Leon": { filmOffice: "Visit Tallahassee / Capital Region Film Commission", phone: "(850) 606-2305", contact: "visittallahassee.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "State Capitol area requires special approval", "State park locations need DEP permit"] },
-      "Levy": { filmOffice: "Levy County Visitors Bureau", phone: "(352) 493-1100", contact: "visitcedarkeyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Cedar Key island locations need additional approval"] },
-      "Liberty": { filmOffice: "Liberty County Chamber of Commerce", phone: "(850) 643-2359", contact: "libertycountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Apalachicola National Forest needs federal permit"] },
-      "Madison": { filmOffice: "Madison County Board of Commissioners", phone: "(850) 973-3179", contact: "madisoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact county for full requirements"] },
-      "Manatee": { filmOffice: "Bradenton Area Film Commission", phone: "(941) 729-9177", contact: "bradentongulfislands.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Anna Maria Island has separate permit requirements", "Beach locations need Parks approval", "Drone permits required separately"] },
-      "Marion": { filmOffice: "Explore Ocala / Marion County", phone: "(352) 438-2800", contact: "ocalamarion.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Ocala National Forest needs USFS permit", "Horse farm locations require direct owner negotiation"] },
-      "Martin": { filmOffice: "Martin County Office of Tourism and Marketing", phone: "(772) 288-5494", contact: "discovermartin.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need Parks approval", "Drone restrictions near Witham Field airport"] },
-      "Monroe": { filmOffice: "Florida Keys / Key West Film Office", phone: "(305) 296-1552", contact: "keywest.com/film", permitFee: "FREE – $150", processingTime: "5–7 business days", restrictions: ["COI required ($1M minimum)", "Coral reef and marine sanctuary filming needs federal permit", "Key West Historic District has special requirements", "Overseas Highway filming requires FDOT coordination"] },
-      "Nassau": { filmOffice: "Amelia Island Tourist Development Council", phone: "(904) 261-3248", contact: "ameliaisland.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need Parks approval", "Fort Clinch State Park needs DEP permit"] },
-      "Okaloosa": { filmOffice: "Emerald Coast Film Commission", phone: "(850) 651-7131", contact: "emeraldcoastfilm.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Eglin AFB proximity restricts some locations", "Beach locations need additional approval", "Drone restrictions near military installations"] },
-      "Okeechobee": { filmOffice: "Okeechobee County Government", phone: "(863) 763-5548", contact: "okeechobeecounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Lake Okeechobee filming may need SFWMD permit"] },
-      "Orange": { filmOffice: "Orlando Film Commission / Metro Orlando Film & Entertainment", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE (St. Cloud: $25/permit)", processingTime: "5 business days (30 days for county parks)", restrictions: ["COI required ($1M minimum)", "Off-duty officers and fire billed separately", "Orange County Parks require 30 days notice", "20% cash rebate available (min $400K local spend)"] },
-      "Osceola": { filmOffice: "Metro Orlando Film & Entertainment Commission", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Disney/Universal proximity — no filming of their IP", "Contact commission for jurisdiction-specific rules"] },
-      "Palm Beach": { filmOffice: "Palm Beach County Film & Television Commission", phone: "(561) 233-1000", contact: "pbfilm.com", permitFee: "FREE (one-stop for 50+ municipalities)", processingTime: "3 business days", restrictions: ["COI required ($1M general liability, $5M for stunts)", "Town of Palm Beach requires SEPARATE permit (30–45 days)", "Town of Palm Beach blackout Nov 15 – Apr 15", "State parks require DEP permit separately"] },
-      "Pasco": { filmOffice: "Florida's Sports Coast", phone: "(727) 847-8129", contact: "floridasportscoast.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Contact commission for jurisdiction-specific rules"] },
-      "Pinellas": { filmOffice: "St. Petersburg-Clearwater Film Commission", phone: "(727) 464-7200", contact: "filmstpete.com", permitFee: "FREE", processingTime: "3–5 business days", restrictions: ["COI required ($1M minimum)", "Clearwater Beach has separate permit requirements", "Drone restrictions near St. Pete-Clearwater airport", "No filming on Sundays before noon in residential areas"] },
-      "Polk": { filmOffice: "Visit Central Florida", phone: "(863) 298-7565", contact: "visitcentralflorida.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "LEGOLAND vicinity has IP restrictions", "Contact commission for full requirements"] },
-      "Putnam": { filmOffice: "Putnam County Chamber of Commerce", phone: "(386) 328-1503", contact: "putnamcountychamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "St. Johns River locations may need SJRWMD permit"] },
-      "St. Johns": { filmOffice: "St. Augustine Film Office", phone: "(904) 209-0585", contact: "floridashistoriccoast.com", permitFee: "FREE – $50", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Historic district has strict filming rules", "Castillo de San Marcos needs NPS permit", "No filming in active church services areas"] },
-      "St. Lucie": { filmOffice: "St. Lucie County Film Office", phone: "(772) 462-1535", contact: "visitstluciefla.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need Parks approval", "Drone restrictions near Treasure Coast International airport"] },
-      "Santa Rosa": { filmOffice: "Santa Rosa County Tourism Development Office", phone: "(850) 981-8900", contact: "sanctuarysound.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Gulf Islands National Seashore needs NPS permit", "Military base proximity may restrict some locations"] },
-      "Sarasota": { filmOffice: "Sarasota County Film & Entertainment Office", phone: "(941) 706-1253", contact: "filmsarasota.com", permitFee: "FREE", processingTime: "3–5 business days", restrictions: ["COI required ($1M minimum)", "Siesta Key Beach requires separate permit", "Historic downtown has special requirements", "Drone permits required separately"] },
-      "Seminole": { filmOffice: "Metro Orlando Film & Entertainment Commission", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Contact commission for jurisdiction-specific rules"] },
-      "Sumter": { filmOffice: "Sumter County Chamber of Commerce", phone: "(352) 793-3099", contact: "sumtercountychamber.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "The Villages has private property restrictions"] },
-      "Suwannee": { filmOffice: "Suwannee County Economic Development", phone: "(386) 362-3071", contact: "suwanneechamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Suwannee River State Park needs DEP permit"] },
-      "Taylor": { filmOffice: "Taylor County Chamber of Commerce", phone: "(850) 584-5366", contact: "taylorcountychamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Union": { filmOffice: "Union County Chamber of Commerce", phone: "(386) 496-2536", contact: "unioncountyfl.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] },
-      "Volusia": { filmOffice: "Volusia County Business Services / New Smyrna Beach Visitors Bureau", phone: "(386) 736-5953", contact: "visitvolusia.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Daytona Beach has separate permit requirements during race events", "Beach driving areas have special restrictions", "Drone permits required separately"] },
-      "Wakulla": { filmOffice: "Wakulla County Economic Development", phone: "(850) 926-0919", contact: "wakullacounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "St. Marks Wildlife Refuge needs federal permit", "Wakulla Springs needs separate park permit"] },
-      "Walton": { filmOffice: "Visit South Walton", phone: "(850) 267-1216", contact: "visitsouthwalton.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "30A corridor has strict noise ordinances", "Beach locations need TDC approval", "Drone permits required separately"] },
-      "Washington": { filmOffice: "Washington County Chamber of Commerce", phone: "(850) 638-4157", contact: "washingtoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Contact chamber for full requirements"] }
+      "Miami-Dade": { state: "FL", filmOffice: "Miami-Dade Office of Film & Entertainment", phone: "(305) 375-3288", contact: "film@miamidade.gov", permitFee: "$150 – $500", processingTime: "3–5 business days", restrictions: ["No filming after 11PM in residential areas", "Drone permits required separately", "Beach locations need Parks dept approval"], lastVerified: "May 2026" },
+      "Broward": { state: "FL", filmOffice: "Film Lauderdale", phone: "(954) 357-6990", contact: "filmlauderdale.org", permitFee: "FREE (special services billed separately)", processingTime: "3 business days", restrictions: ["COI required ($1M minimum)", "Covers 31 municipalities in one application", "Drone and pyro permits required separately"], lastVerified: "May 2026" },
+      "Hillsborough": { state: "FL", filmOffice: "Film Tampa Bay", phone: "(813) 223-1111", contact: "filmtampabay.com", permitFee: "FREE (special services billed separately)", processingTime: "5 business days", restrictions: ["COI required naming county/city as additional insured", "Street closures require 10 business days minimum"], lastVerified: "May 2026" },
+      "Orange": { state: "FL", filmOffice: "Orlando Film Commission", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Orange County Parks require 30 days notice", "20% cash rebate available (min $400K local spend)"], lastVerified: "May 2026" },
+      "Palm Beach": { state: "FL", filmOffice: "Palm Beach County Film & Television Commission", phone: "(561) 233-1000", contact: "pbfilm.com", permitFee: "FREE", processingTime: "3 business days", restrictions: ["COI required ($1M general liability, $5M for stunts)", "Town of Palm Beach blackout Nov 15 – Apr 15"], lastVerified: "May 2026" },
+      "Duval": { state: "FL", filmOffice: "Jacksonville Film & Television Office", phone: "(904) 630-1905", contact: "filmjax.com", permitFee: "FREE", processingTime: "10 business days", restrictions: ["COI required ($1M liability + $100K workers comp)", "No drone filming within 5 nautical miles of airport"], lastVerified: "May 2026" },
+      "Pinellas": { state: "FL", filmOffice: "St. Petersburg-Clearwater Film Commission", phone: "(727) 464-7200", contact: "filmstpete.com", permitFee: "FREE", processingTime: "3–5 business days", restrictions: ["COI required ($1M minimum)", "Drone restrictions near St. Pete-Clearwater airport"], lastVerified: "May 2026" },
+      "Pasco": { state: "FL", filmOffice: "Florida's Sports Coast", phone: "(727) 847-8129", contact: "floridasportscoast.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)"], lastVerified: "May 2026" },
+      "Sarasota": { state: "FL", filmOffice: "Sarasota County Film & Entertainment Office", phone: "(941) 706-1253", contact: "filmsarasota.com", permitFee: "FREE", processingTime: "3–5 business days", restrictions: ["COI required ($1M minimum)", "Siesta Key Beach requires separate permit"], lastVerified: "May 2026" },
+      "Lee": { state: "FL", filmOffice: "Lee County Film Office", phone: "(239) 338-3500", contact: "leegov.com/film", permitFee: "FREE", processingTime: "3 business days", restrictions: ["COI required ($1M minimum)", "Drone restrictions near Page Field airport"], lastVerified: "May 2026" },
+      "Collier": { state: "FL", filmOffice: "Florida's Paradise Coast Film Commission", phone: "(239) 252-2384", contact: "paradisecoast.com", permitFee: "FREE", processingTime: "24–48 hours", restrictions: ["COI required ($1M minimum)", "Everglades filming needs federal permit"], lastVerified: "May 2026" },
+      "Volusia": { state: "FL", filmOffice: "Volusia County Business Services", phone: "(386) 736-5953", contact: "visitvolusia.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Daytona Beach has separate requirements during race events"], lastVerified: "May 2026" },
+      "Brevard": { state: "FL", filmOffice: "Space Coast Florida", phone: "(321) 433-4470", contact: "visitspacecoast.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Kennedy Space Center requires federal permits"], lastVerified: "May 2026" },
+      "Manatee": { state: "FL", filmOffice: "Bradenton Area Film Commission", phone: "(941) 729-9177", contact: "bradentongulfislands.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Anna Maria Island has separate permit requirements"], lastVerified: "May 2026" },
+      "Seminole": { state: "FL", filmOffice: "Metro Orlando Film & Entertainment Commission", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)"], lastVerified: "May 2026" },
+      "Osceola": { state: "FL", filmOffice: "Metro Orlando Film & Entertainment Commission", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Disney/Universal proximity — no filming of their IP"], lastVerified: "May 2026" },
+      "Lake": { state: "FL", filmOffice: "Metro Orlando Film & Entertainment Commission", phone: "(407) 446-0201", contact: "filmorlando.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)"], lastVerified: "May 2026" },
+      "Polk": { state: "FL", filmOffice: "Visit Central Florida", phone: "(863) 298-7565", contact: "visitcentralflorida.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Marion": { state: "FL", filmOffice: "Explore Ocala / Marion County", phone: "(352) 438-2800", contact: "ocalamarion.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Ocala National Forest needs USFS permit"], lastVerified: "May 2026" },
+      "Alachua": { state: "FL", filmOffice: "Alachua County Visitors & Convention Bureau", phone: "(352) 374-5231", contact: "visitgainesville.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)"], lastVerified: "May 2026" },
+      "Leon": { state: "FL", filmOffice: "Visit Tallahassee / Capital Region Film Commission", phone: "(850) 606-2305", contact: "visittallahassee.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "State Capitol area requires special approval"], lastVerified: "May 2026" },
+      "Escambia": { state: "FL", filmOffice: "Visit Pensacola", phone: "(850) 434-1234", contact: "visitpensacola.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Military base proximity may restrict some locations"], lastVerified: "May 2026" },
+      "Okaloosa": { state: "FL", filmOffice: "Emerald Coast Film Commission", phone: "(850) 651-7131", contact: "emeraldcoastfilm.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Eglin AFB proximity restricts some locations"], lastVerified: "May 2026" },
+      "Walton": { state: "FL", filmOffice: "Visit South Walton", phone: "(850) 267-1216", contact: "visitsouthwalton.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "30A corridor has strict noise ordinances"], lastVerified: "May 2026" },
+      "Bay": { state: "FL", filmOffice: "Panama City Film Office", phone: "(850) 215-3425", contact: "visitpanamacitybeach.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need additional approval"], lastVerified: "May 2026" },
+      "Monroe": { state: "FL", filmOffice: "Florida Keys / Key West Film Office", phone: "(305) 296-1552", contact: "keywest.com/film", permitFee: "FREE – $150", processingTime: "5–7 business days", restrictions: ["COI required ($1M minimum)", "Coral reef filming needs federal permit", "Key West Historic District has special requirements"], lastVerified: "May 2026" },
+      "St. Johns": { state: "FL", filmOffice: "St. Augustine Film Office", phone: "(904) 209-0585", contact: "floridashistoriccoast.com", permitFee: "FREE – $50", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Historic district has strict filming rules", "Castillo de San Marcos needs NPS permit"], lastVerified: "May 2026" },
+      "Nassau": { state: "FL", filmOffice: "Amelia Island Tourist Development Council", phone: "(904) 261-3248", contact: "ameliaisland.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Beach locations need Parks approval"], lastVerified: "May 2026" },
+      "Indian River": { state: "FL", filmOffice: "Indian River Chamber of Commerce", phone: "(772) 567-3491", contact: "indianriverchamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)", "Drone restrictions near airport"], lastVerified: "May 2026" },
+      "Martin": { state: "FL", filmOffice: "Martin County Office of Tourism", phone: "(772) 288-5494", contact: "discovermartin.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)"], lastVerified: "May 2026" },
+      "St. Lucie": { state: "FL", filmOffice: "St. Lucie County Film Office", phone: "(772) 462-1535", contact: "visitstluciefla.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)"], lastVerified: "May 2026" },
+      "Charlotte": { state: "FL", filmOffice: "Punta Gorda/Englewood Beach VCB", phone: "(941) 743-1900", contact: "charlotteharbordestinations.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required ($1M minimum)"], lastVerified: "May 2026" },
+      "Highlands": { state: "FL", filmOffice: "Visit Sebring Tourist Development Council", phone: "(863) 402-6909", contact: "visitsebringusflorida.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Hendry": { state: "FL", filmOffice: "Hendry County Government", phone: "(863) 675-5220", contact: "hendrycountyfl.gov", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Glades": { state: "FL", filmOffice: "Glades County Economic Development", phone: "(863) 946-6000", contact: "gladescounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Okeechobee": { state: "FL", filmOffice: "Okeechobee County Government", phone: "(863) 763-5548", contact: "okeechobeecounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Lake Okeechobee filming may need SFWMD permit"], lastVerified: "May 2026" },
+      "Hernando": { state: "FL", filmOffice: "Florida's Adventure Coast", phone: "(352) 754-4405", contact: "floridasadventurecoast.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Weeki Wachee Springs needs separate permit"], lastVerified: "May 2026" },
+      "Citrus": { state: "FL", filmOffice: "Discover Crystal River", phone: "(352) 563-0450", contact: "discovercrystalriverfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Manatee protection zones restrict some filming"], lastVerified: "May 2026" },
+      "Sumter": { state: "FL", filmOffice: "Sumter County Chamber of Commerce", phone: "(352) 793-3099", contact: "sumtercountychamber.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "The Villages has private property restrictions"], lastVerified: "May 2026" },
+      "Levy": { state: "FL", filmOffice: "Levy County Visitors Bureau", phone: "(352) 493-1100", contact: "visitcedarkeyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Gilchrist": { state: "FL", filmOffice: "Gilchrist Board of Commissioners", phone: "(352) 463-3169", contact: "gilchristcounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Spring locations may need DEP permit"], lastVerified: "May 2026" },
+      "Columbia": { state: "FL", filmOffice: "Columbia County Tourism Office", phone: "(386) 758-1312", contact: "lakecitycvb.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Suwannee": { state: "FL", filmOffice: "Suwannee County Economic Development", phone: "(386) 362-3071", contact: "suwanneechamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Suwannee River State Park needs DEP permit"], lastVerified: "May 2026" },
+      "Hamilton": { state: "FL", filmOffice: "Hamilton County Government", phone: "(386) 792-1288", contact: "hamiltoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Madison": { state: "FL", filmOffice: "Madison County Board of Commissioners", phone: "(850) 973-3179", contact: "madisoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Taylor": { state: "FL", filmOffice: "Taylor County Chamber of Commerce", phone: "(850) 584-5366", contact: "taylorcountychamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Lafayette": { state: "FL", filmOffice: "Lafayette County Chamber of Commerce", phone: "(386) 294-2705", contact: "lafayettecountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Dixie": { state: "FL", filmOffice: "Dixie County Chamber of Commerce", phone: "(352) 498-5454", contact: "dixiecounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Gilchrist": { state: "FL", filmOffice: "Gilchrist Board of Commissioners", phone: "(352) 463-3169", contact: "gilchristcounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Wakulla": { state: "FL", filmOffice: "Wakulla County Economic Development", phone: "(850) 926-0919", contact: "wakullacounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Wakulla Springs needs separate park permit"], lastVerified: "May 2026" },
+      "Franklin": { state: "FL", filmOffice: "Apalachicola Bay Chamber of Commerce", phone: "(850) 653-9419", contact: "apalachicolabay.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "State park locations need DEP permit"], lastVerified: "May 2026" },
+      "Gulf": { state: "FL", filmOffice: "Gulf County Tourism Office", phone: "(850) 227-1223", contact: "visitgulf.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Calhoun": { state: "FL", filmOffice: "Calhoun County Chamber of Commerce", phone: "(850) 674-4519", contact: "calhounco.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Liberty": { state: "FL", filmOffice: "Liberty County Chamber of Commerce", phone: "(850) 643-2359", contact: "libertycountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Apalachicola National Forest needs federal permit"], lastVerified: "May 2026" },
+      "Gadsden": { state: "FL", filmOffice: "Gadsden County Chamber of Commerce", phone: "(850) 627-9231", contact: "gadsdenchamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Jefferson": { state: "FL", filmOffice: "Jefferson County Government", phone: "(850) 342-0218", contact: "jeffersoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Jackson": { state: "FL", filmOffice: "Jackson County Tourist Development Council", phone: "(850) 482-8060", contact: "jacksoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Holmes": { state: "FL", filmOffice: "Holmes County Board of County Commissioners", phone: "(850) 547-1100", contact: "holmescountyfl.gov", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Washington": { state: "FL", filmOffice: "Washington County Chamber of Commerce", phone: "(850) 638-4157", contact: "washingtoncountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Santa Rosa": { state: "FL", filmOffice: "Santa Rosa County Tourism Development", phone: "(850) 981-8900", contact: "sanctuarysound.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Gulf Islands National Seashore needs NPS permit"], lastVerified: "May 2026" },
+      "Flagler": { state: "FL", filmOffice: "City of Bunnell / Palm Coast Film Office", phone: "(386) 313-4170", contact: "palmcoastgov.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Putnam": { state: "FL", filmOffice: "Putnam County Chamber of Commerce", phone: "(386) 328-1503", contact: "putnamcountychamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Clay": { state: "FL", filmOffice: "Clay County Board of Commissioners", phone: "(904) 269-6300", contact: "claycountygov.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Baker": { state: "FL", filmOffice: "Baker County Chamber of Commerce", phone: "(904) 259-6433", contact: "bakerchamberfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Union": { state: "FL", filmOffice: "Union County Chamber of Commerce", phone: "(386) 496-2536", contact: "unioncountyfl.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Bradford": { state: "FL", filmOffice: "North Florida Regional Chamber of Commerce", phone: "(904) 964-5278", contact: "starkefl.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Hardee": { state: "FL", filmOffice: "Hardee Board of County Commissioners", phone: "(863) 773-9430", contact: "hardeecounty.net", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "DeSoto": { state: "FL", filmOffice: "DeSoto County Chamber of Commerce", phone: "(863) 494-4033", contact: "desotochamber.net", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
+      "Highlands": { state: "FL", filmOffice: "Visit Sebring Tourist Development Council", phone: "(863) 402-6909", contact: "visitsebringusflorida.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" }
     };
 
-    // Reverse geocode to get Florida county from coordinates
-  async function getFloridaCounty(checkLat, checkLng) {
+    async function getFloridaCounty(checkLat, checkLng) {
       try {
-        const res = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${checkLng},${checkLat}.json?access_token=pk.eyJ1Ijoic3VwZXJzdWF2YWUyMiIsImEiOiJjbXA2ZWVhYTkxbW1qMnFweWxrZHo5bDRjIn0.5y-HXoD_v5O77Knbk2vtBQ&types=region,district`
-        );
+        const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${checkLng},${checkLat}.json?access_token=pk.eyJ1Ijoic3VwZXJzdWF2YWUyMiIsImEiOiJjbXA2ZWVhYTkxbW1qMnFweWxrZHo5bDRjIn0.5y-HXoD_v5O77Knbk2vtBQ&types=region,district`);
         const data = await res.json();
         if (!data.features || data.features.length === 0) return { inFlorida: false, county: null };
-        
         let county = null;
         let inFlorida = false;
-
         for (const feature of data.features) {
           const context = [feature, ...(feature.context || [])];
           for (const c of context) {
@@ -310,31 +336,20 @@
           }
         }
         return { inFlorida, county };
-      } catch (e) {
-        return { inFlorida: false, county: null };
-      }
+      } catch (e) { return { inFlorida: false, county: null }; }
     }
 
     async function showMunicPopup(checkLat, checkLng) {
       const popup = document.getElementById("municPopup");
       const content = document.getElementById("municContent");
-      content.innerHTML = `<div id="municLoading">🔍 Looking up county data...</div>`;
+      content.innerHTML = `<div style="text-align:center;color:#f0a500;padding:20px;">🔍 Looking up county data...</div>`;
       popup.classList.add("visible");
-
       const { inFlorida, county } = await getFloridaCounty(checkLat, checkLng);
-
       if (!inFlorida) {
-        content.innerHTML = `
-          <div class="not-covered">
-            <div class="county-name">Outside Florida</div>
-            <p>SetScout Municipal Intel currently covers all Florida counties. National expansion is coming soon.</p>
-            <button class="btn btn-close" onclick="closeMunicPopup()">Close</button>
-          </div>`;
+        content.innerHTML = `<div class="not-covered"><div class="county-name">Outside Florida</div><p>SetScout Municipal Intel currently covers all Florida counties. National expansion is coming soon.</p><button class="btn btn-close" onclick="closeMunicPopup()">Close</button></div>`;
         return;
       }
-
       const data = floridaFilmData[county];
-
       if (data) {
         content.innerHTML = `
           <div class="county-name">${county} County, FL</div>
@@ -343,124 +358,67 @@
           <div class="row"><span class="label">Website</span><span class="value">${data.contact}</span></div>
           <div class="row"><span class="label">Permit Fee</span><span class="value yellow">${data.permitFee}</span></div>
           <div class="row"><span class="label">Processing Time</span><span class="value">${data.processingTime}</span></div>
-          <div class="restrictions">
-            <strong>⚠️ Key Requirements</strong><br/>
-            ${data.restrictions.map(r => `• ${r}`).join('<br/>')}
-          </div>
-          <div class="last-verified">Last verified: May 2026 • Source: filminflorida.com</div>
+          <div class="restrictions"><strong>⚠️ Key Requirements</strong><br/>${data.restrictions.map(r => `• ${r}`).join('<br/>')}</div>
+          <div class="last-verified">Last verified: ${data.lastVerified} • Source: filminflorida.com</div>
           <div class="btn-row">
             <button class="btn btn-flag" onclick="flagData()">🚩 Flag as Outdated</button>
             <button class="btn btn-close" onclick="closeMunicPopup()">Close</button>
           </div>
-          <div id="flagConfirm">✅ Thanks! We'll review this data.</div>
-        `;
+          <div id="flagConfirm">✅ Thanks! We'll review this data.</div>`;
       } else {
         content.innerHTML = `
           <div class="not-covered">
             <div class="county-name">${county} County, FL</div>
-            <p>This county is in Florida but we don't have detailed permit data yet. Click below to request it.</p>
+            <p>This county is in Florida but we don't have detailed permit data yet.</p>
             <button class="btn btn-request" onclick="requestCounty(${checkLat}, ${checkLng}, '${county}')">📬 Request This County</button>
             <br/><br/>
             <button class="btn btn-close" onclick="closeMunicPopup()">Close</button>
-          </div>
-        `;
+          </div>`;
       }
     }
 
-    function closeMunicPopup() {
-      document.getElementById("municPopup").classList.remove("visible");
-    }
-
+    function closeMunicPopup() { document.getElementById("municPopup").classList.remove("visible"); }
     function flagData() {
       document.getElementById("flagConfirm").style.display = "block";
       setTimeout(() => { document.getElementById("flagConfirm").style.display = "none"; }, 3000);
     }
-
     function requestCounty(reqLat, reqLng, countyName) {
       const subject = encodeURIComponent(`SetScout County Request — ${countyName} County, FL`);
       const body = encodeURIComponent(`Hi,\n\nI'd like to request municipal permit data for ${countyName} County, Florida.\n\nCoordinates: ${reqLat.toFixed(4)}, ${reqLng.toFixed(4)}\n\nThank you!`);
       window.open(`mailto:dj.enviouscultureprod@gmail.com?subject=${subject}&body=${body}`);
     }
 
-    // Scene data
-    let scenesByLocation = {};
-
-    function getLocationKey() { return `${lat.toFixed(4)},${lng.toFixed(4)}`; }
-
-    function openSceneModal() {
-      document.getElementById("sceneLocName").textContent = locationName;
-      document.getElementById("sceneNumber").value = "";
-      document.getElementById("sceneName").value = "";
-      document.getElementById("sceneNote").value = "";
-      renderSavedScenes();
-      document.getElementById("sceneModal").classList.add("visible");
-      closeMunicPopup();
-    }
-
-    function closeSceneModal() { document.getElementById("sceneModal").classList.remove("visible"); }
-
-    function saveScene() {
-      const num = document.getElementById("sceneNumber").value.trim();
-      const name = document.getElementById("sceneName").value.trim();
-      const note = document.getElementById("sceneNote").value.trim();
-      if (!num && !name) { alert("Please enter at least a scene number or name."); return; }
-      const key = getLocationKey();
-      if (!scenesByLocation[key]) scenesByLocation[key] = [];
-      scenesByLocation[key].push({ num, name, note, location: locationName, lat, lng });
-      renderSavedScenes();
-      updateSceneTag();
-      document.getElementById("sceneNumber").value = "";
-      document.getElementById("sceneName").value = "";
-      document.getElementById("sceneNote").value = "";
-    }
-
-    function removeScene(key, index) {
-      scenesByLocation[key].splice(index, 1);
-      renderSavedScenes();
-      updateSceneTag();
-    }
-
-    function renderSavedScenes() {
-      const key = getLocationKey();
-      const scenes = scenesByLocation[key] || [];
-      const container = document.getElementById("savedScenes");
-      if (scenes.length === 0) {
-        container.innerHTML = `<div style="color:#555;font-size:12px;margin-bottom:8px;">No scenes linked to this location yet.</div>`;
-        return;
-      }
-      container.innerHTML = scenes.map((s, i) => `
-        <div class="scene-item">
-          <span class="scene-remove" onclick="removeScene('${key}', ${i})">✕ Remove</span>
-          <div class="scene-title">Scene ${s.num}${s.name ? ' — ' + s.name : ''}</div>
-          ${s.note ? `<div class="scene-note">${s.note}</div>` : ''}
-        </div>
-      `).join('');
-    }
-
-    function updateSceneTag() {
-      const key = getLocationKey();
-      const scenes = scenesByLocation[key] || [];
-      const tag = document.getElementById("sceneTag");
-      if (scenes.length > 0) {
-        const first = scenes[0];
-        tag.textContent = `🎬 Scene ${first.num}${first.name ? ' — ' + first.name : ''}${scenes.length > 1 ? ` +${scenes.length - 1} more` : ''}`;
-        tag.style.display = "block";
-      } else {
-        tag.style.display = "none";
-      }
-    }
-
-    // Cesium setup
+    // URL params
     const params = new URLSearchParams(window.location.search);
     let lat = parseFloat(params.get("lat")) || 25.7617;
     let lng = parseFloat(params.get("lng")) || -80.1918;
     const zoom = parseFloat(params.get("zoom")) || 800;
     let locationName = params.get("name") ? decodeURIComponent(params.get("name")) : "Miami, FL";
+    const locationId = params.get("locationId") || null;
 
     document.getElementById("locationName").textContent = locationName;
+    if (locationId) {
+      document.getElementById("syncBadge").style.display = "block";
+    }
+
     const todayStr = new Date().toISOString().split("T")[0];
     document.getElementById("shootDate").value = todayStr;
     let selectedDate = new Date();
+
+    // Scene data — synced with Base44 when locationId is present
+    let sceneTags = [];
+
+    async function loadSceneTagsFromBase44() {
+      if (!locationId) return;
+      const location = await fetchLocationFromBase44(locationId);
+      if (location && location.scene_tags && Array.isArray(location.scene_tags)) {
+        sceneTags = location.scene_tags;
+        updateSceneTag();
+      }
+    }
+
+    // Cesium setup
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3YTUzZDI5MC1hYzY0LTRhODctOGI0Mi1jZjM4NjFiYWZlM2QiLCJpZCI6NDE2OTcxLCJpYXQiOjE3NzU5NTgwNjh9.XLiMJOeS6bfl6V-SbpAe3tAAznxBPKheLvYVven0tXM';
 
     const viewer = new Cesium.Viewer("cesiumContainer", {
       timeline: false, animation: false, shadows: true, geocoder: false,
@@ -503,6 +461,84 @@
       updateSceneTag();
     }
 
+    // Scene functions
+    function openSceneModal() {
+      document.getElementById("sceneLocName").textContent = locationName;
+      document.getElementById("sceneNumber").value = "";
+      document.getElementById("sceneName").value = "";
+      document.getElementById("sceneNote").value = "";
+      document.getElementById("syncStatus").style.display = "none";
+      document.getElementById("syncError").style.display = "none";
+      if (locationId) document.getElementById("syncIndicator").style.display = "block";
+      renderSavedScenes();
+      document.getElementById("sceneModal").classList.add("visible");
+      closeMunicPopup();
+    }
+
+    function closeSceneModal() { document.getElementById("sceneModal").classList.remove("visible"); }
+
+    async function saveScene() {
+      const num = document.getElementById("sceneNumber").value.trim();
+      const name = document.getElementById("sceneName").value.trim();
+      const note = document.getElementById("sceneNote").value.trim();
+      if (!num && !name) { alert("Please enter at least a scene number or name."); return; }
+
+      const newTag = { num, name, note, location: locationName };
+      sceneTags.push(newTag);
+      renderSavedScenes();
+      updateSceneTag();
+
+      document.getElementById("sceneNumber").value = "";
+      document.getElementById("sceneName").value = "";
+      document.getElementById("sceneNote").value = "";
+
+      if (locationId) {
+        const success = await saveSceneTagsToBase44(locationId, sceneTags);
+        if (success) {
+          document.getElementById("syncStatus").style.display = "block";
+          setTimeout(() => { document.getElementById("syncStatus").style.display = "none"; }, 3000);
+        } else {
+          document.getElementById("syncError").style.display = "block";
+          setTimeout(() => { document.getElementById("syncError").style.display = "none"; }, 4000);
+        }
+      }
+    }
+
+    async function removeScene(index) {
+      sceneTags.splice(index, 1);
+      renderSavedScenes();
+      updateSceneTag();
+      if (locationId) {
+        await saveSceneTagsToBase44(locationId, sceneTags);
+      }
+    }
+
+    function renderSavedScenes() {
+      const container = document.getElementById("savedScenes");
+      if (sceneTags.length === 0) {
+        container.innerHTML = `<div style="color:#555;font-size:12px;margin-bottom:8px;">No scenes linked to this location yet.</div>`;
+        return;
+      }
+      container.innerHTML = sceneTags.map((s, i) => `
+        <div class="scene-item">
+          <span class="scene-remove" onclick="removeScene(${i})">✕ Remove</span>
+          <div class="scene-title">Scene ${s.num}${s.name ? ' — ' + s.name : ''}</div>
+          ${s.note ? `<div class="scene-note">${s.note}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function updateSceneTag() {
+      const tag = document.getElementById("sceneTag");
+      if (sceneTags.length > 0) {
+        const first = sceneTags[0];
+        tag.textContent = `🎬 Scene ${first.num}${first.name ? ' — ' + first.name : ''}${sceneTags.length > 1 ? ` +${sceneTags.length - 1} more` : ''}`;
+        tag.style.display = "block";
+      } else {
+        tag.style.display = "none";
+      }
+    }
+
     viewer.scene.postRender.addEventListener(function() {
       if (!pinEntity) return;
       const pinPos = Cesium.Cartesian3.fromDegrees(lng, lat, 0);
@@ -540,7 +576,7 @@
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-function doSearch() {
+    function doSearch() {
       const query = document.getElementById("searchInput").value.trim();
       if (!query) return;
       document.getElementById("searchBtn").textContent = "...";
@@ -548,10 +584,7 @@ function doSearch() {
         .then(res => res.json())
         .then(data => {
           document.getElementById("searchBtn").textContent = "Go";
-          if (!data.features || data.features.length === 0) {
-            alert("Location not found. Try using a zip code instead of city name, or search a nearby landmark.");
-            return;
-          }
+          if (!data.features || data.features.length === 0) { alert("Location not found. Try using a zip code or nearby landmark."); return; }
           const result = data.features[0];
           lng = result.center[0];
           lat = result.center[1];
@@ -577,9 +610,7 @@ function doSearch() {
     function getDateAtMinute(date, minute) {
       const d = new Date(date); d.setHours(0, 0, 0, 0); d.setMinutes(minute); return d;
     }
-
     function formatTime(date) { return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-
     function formatDaylight(sunrise, sunset) {
       const mins = Math.round((sunset - sunrise) / 60000);
       return `${Math.floor(mins / 60)}h ${mins % 60}m`;
@@ -659,10 +690,12 @@ function doSearch() {
 
     document.getElementById("scrubber").addEventListener("input", function() { updateSun(parseInt(this.value)); });
 
+    // Init
     placePin(lat, lng, locationName);
     buildSunArc(lat, lng, selectedDate);
     updateKeyTimes(lat, lng, selectedDate);
     updateSun(720);
+    loadSceneTagsFromBase44();
   </script>
 </body>
 </html>
