@@ -9,27 +9,12 @@
   <style>
     html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
     .cesium-viewer-geocoderContainer { display: none !important; }
-
-    #searchBar {
-      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 8px; z-index: 1500; width: 420px;
-    }
-    #searchInput {
-      flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #f0a500;
-      background: rgba(0,0,0,0.85); color: #fff; font-size: 14px; font-family: sans-serif; outline: none;
-    }
+    #searchBar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 1500; width: 420px; }
+    #searchInput { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #f0a500; background: rgba(0,0,0,0.85); color: #fff; font-size: 14px; font-family: sans-serif; outline: none; }
     #searchInput::placeholder { color: #888; }
-    #searchBtn {
-      padding: 10px 16px; background: #f0a500; color: #000; border: none;
-      border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; font-family: sans-serif;
-    }
+    #searchBtn { padding: 10px 16px; background: #f0a500; color: #000; border: none; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; font-family: sans-serif; }
     #searchBtn:hover { background: #e09400; }
-
-    #ui {
-      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.75); color: #fff; padding: 14px 20px;
-      border-radius: 12px; width: 420px; font-family: sans-serif; z-index: 999;
-    }
+    #ui { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); color: #fff; padding: 14px 20px; border-radius: 12px; width: 420px; font-family: sans-serif; z-index: 999; }
     #ui h3 { margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
     #timeDisplay { font-size: 18px; font-weight: bold; margin-bottom: 6px; color: #fff; }
     #sunStats { font-size: 13px; color: #ccc; margin-bottom: 10px; }
@@ -37,40 +22,17 @@
     #keyTimes { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 6px; }
     #keyTimes span { text-align: center; }
     #keyTimes .label { color: #f0a500; }
-
-    #dateToggle {
-      position: absolute; top: 50%; right: 0; transform: translateY(-50%);
-      background: rgba(0,0,0,0.85); color: #f0a500; border: 1px solid #f0a500;
-      border-right: none; border-radius: 8px 0 0 8px; padding: 10px 8px;
-      cursor: pointer; font-family: sans-serif; font-size: 12px; font-weight: bold;
-      z-index: 1001; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 1px;
-    }
-    #datePanel {
-      position: absolute; top: 50%; right: -320px; transform: translateY(-50%);
-      width: 280px; background: rgba(0,0,0,0.85); color: #fff;
-      border: 1px solid #f0a500; border-radius: 12px 0 0 12px;
-      padding: 20px; font-family: sans-serif; z-index: 1000; transition: right 0.3s ease;
-    }
+    #dateToggle { position: absolute; top: 50%; right: 0; transform: translateY(-50%); background: rgba(0,0,0,0.85); color: #f0a500; border: 1px solid #f0a500; border-right: none; border-radius: 8px 0 0 8px; padding: 10px 8px; cursor: pointer; font-family: sans-serif; font-size: 12px; font-weight: bold; z-index: 1001; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 1px; }
+    #datePanel { position: absolute; top: 50%; right: -320px; transform: translateY(-50%); width: 280px; background: rgba(0,0,0,0.85); color: #fff; border: 1px solid #f0a500; border-radius: 12px 0 0 12px; padding: 20px; font-family: sans-serif; z-index: 1000; transition: right 0.3s ease; }
     #datePanel.open { right: 0; }
     #datePanel h3 { margin: 0 0 16px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
     #datePanel label { font-size: 12px; color: #aaa; display: block; margin-bottom: 6px; }
-    #shootDate {
-      width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #f0a500;
-      background: #111; color: #fff; font-size: 14px; box-sizing: border-box; margin-bottom: 16px;
-    }
+    #shootDate { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #f0a500; background: #111; color: #fff; font-size: 14px; box-sizing: border-box; margin-bottom: 16px; }
     #datePanel .sun-summary { font-size: 12px; color: #ccc; line-height: 1.8; }
     #datePanel .sun-summary span { color: #f0a500; font-weight: bold; }
     .divider { border: none; border-top: 1px solid #333; margin: 14px 0; }
     #goldenHourNote { font-size: 11px; color: #888; margin-top: 10px; line-height: 1.6; }
-
-    #municPopup {
-      display: none; position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%); width: 340px;
-      background: rgba(10,10,10,0.95); color: #fff;
-      border: 1px solid #f0a500; border-radius: 14px; padding: 22px;
-      font-family: sans-serif; z-index: 2000; box-shadow: 0 0 30px rgba(240,165,0,0.2);
-      max-height: 80vh; overflow-y: auto;
-    }
+    #municPopup { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 340px; background: rgba(10,10,10,0.95); color: #fff; border: 1px solid #f0a500; border-radius: 14px; padding: 22px; font-family: sans-serif; z-index: 2000; box-shadow: 0 0 30px rgba(240,165,0,0.2); max-height: 80vh; overflow-y: auto; }
     #municPopup.visible { display: block; }
     #municPopup h3 { margin: 0 0 4px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f0a500; }
     #municPopup .county-name { font-size: 18px; font-weight: bold; margin-bottom: 14px; color: #fff; }
@@ -79,10 +41,7 @@
     #municPopup .row .value { color: #fff; width: 55%; text-align: right; }
     #municPopup .row .value.yellow { color: #f0a500; }
     #municPopup .row .value.green { color: #4caf50; }
-    #municPopup .restrictions {
-      margin-top: 10px; font-size: 11px; color: #aaa;
-      background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px; line-height: 1.6;
-    }
+    #municPopup .restrictions { margin-top: 10px; font-size: 11px; color: #aaa; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px; line-height: 1.6; }
     #municPopup .restrictions strong { color: #f0a500; }
     #municPopup .btn-row { display: flex; gap: 8px; margin-top: 14px; }
     #municPopup .btn { flex: 1; padding: 8px; border-radius: 8px; border: none; font-size: 12px; font-weight: bold; cursor: pointer; }
@@ -93,74 +52,36 @@
     #municPopup .not-covered p { color: #aaa; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
     #flagConfirm { display: none; font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; }
     #municPopup .last-verified { font-size: 10px; color: #555; margin-top: 10px; text-align: right; }
-
-    #sceneLinkBtn {
-      display: none; position: absolute; z-index: 1800;
-      background: rgba(0,0,0,0.9); border: 1px solid #4fc3f7;
-      border-radius: 10px; padding: 6px 12px; color: #4fc3f7;
-      font-family: sans-serif; font-size: 12px; font-weight: bold;
-      cursor: pointer; white-space: nowrap;
-    }
+    #sceneLinkBtn { display: none; position: absolute; z-index: 1800; background: rgba(0,0,0,0.9); border: 1px solid #4fc3f7; border-radius: 10px; padding: 6px 12px; color: #4fc3f7; font-family: sans-serif; font-size: 12px; font-weight: bold; cursor: pointer; white-space: nowrap; }
     #sceneLinkBtn:hover { background: rgba(79,195,247,0.15); }
-
-    #sceneModal {
-      display: none; position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%); width: 360px;
-      background: rgba(10,10,10,0.97); color: #fff;
-      border: 1px solid #4fc3f7; border-radius: 14px; padding: 24px;
-      font-family: sans-serif; z-index: 3000; box-shadow: 0 0 30px rgba(79,195,247,0.2);
-      max-height: 80vh; overflow-y: auto;
-    }
+    #sceneModal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 360px; background: rgba(10,10,10,0.97); color: #fff; border: 1px solid #4fc3f7; border-radius: 14px; padding: 24px; font-family: sans-serif; z-index: 3000; box-shadow: 0 0 30px rgba(79,195,247,0.2); max-height: 80vh; overflow-y: auto; }
     #sceneModal.visible { display: block; }
     #sceneModal h3 { margin: 0 0 16px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #4fc3f7; }
     #sceneModal label { font-size: 12px; color: #aaa; display: block; margin-bottom: 5px; margin-top: 12px; }
-    #sceneModal input, #sceneModal textarea {
-      width: 100%; padding: 8px 10px; border-radius: 6px;
-      border: 1px solid #4fc3f7; background: #111; color: #fff;
-      font-size: 13px; box-sizing: border-box; font-family: sans-serif;
-    }
+    #sceneModal input, #sceneModal textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #4fc3f7; background: #111; color: #fff; font-size: 13px; box-sizing: border-box; font-family: sans-serif; }
     #sceneModal textarea { height: 70px; resize: none; }
     #sceneModal .btn-row { display: flex; gap: 8px; margin-top: 16px; }
     #sceneModal .btn { flex: 1; padding: 9px; border-radius: 8px; border: none; font-size: 13px; font-weight: bold; cursor: pointer; }
     #sceneModal .btn-save { background: #4fc3f7; color: #000; }
     #sceneModal .btn-cancel { background: rgba(255,255,255,0.08); color: #aaa; border: 1px solid #444; }
-    #sceneModal .sync-status { font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; display: none; }
-    #sceneModal .sync-error { font-size: 11px; color: #f44336; margin-top: 8px; text-align: center; display: none; }
-
-    #sceneTag {
-      display: none; position: absolute; z-index: 1700;
-      background: rgba(79,195,247,0.15); border: 1px solid #4fc3f7;
-      border-radius: 8px; padding: 5px 10px; color: #4fc3f7;
-      font-family: sans-serif; font-size: 11px; max-width: 200px; pointer-events: none;
-    }
-
+    #sceneTag { display: none; position: absolute; z-index: 1700; background: rgba(79,195,247,0.15); border: 1px solid #4fc3f7; border-radius: 8px; padding: 5px 10px; color: #4fc3f7; font-family: sans-serif; font-size: 11px; max-width: 200px; pointer-events: none; }
     #savedScenes { margin-top: 14px; }
-    #savedScenes .scene-item {
-      background: rgba(79,195,247,0.08); border: 1px solid #1a3a4a;
-      border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 12px;
-    }
+    #savedScenes .scene-item { background: rgba(79,195,247,0.08); border: 1px solid #1a3a4a; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 12px; }
     #savedScenes .scene-item .scene-title { color: #4fc3f7; font-weight: bold; margin-bottom: 3px; }
     #savedScenes .scene-item .scene-note { color: #aaa; }
     #savedScenes .scene-item .scene-remove { float: right; color: #f44336; cursor: pointer; font-size: 11px; margin-top: 2px; }
-
-    #syncBadge {
-      display: none; position: absolute; top: 14px; right: 60px;
-      background: rgba(79,195,247,0.15); border: 1px solid #4fc3f7;
-      border-radius: 8px; padding: 6px 12px; color: #4fc3f7;
-      font-family: sans-serif; font-size: 11px; z-index: 1500;
-    }
+    #syncBadge { display: none; position: absolute; top: 14px; right: 60px; background: rgba(79,195,247,0.15); border: 1px solid #4fc3f7; border-radius: 8px; padding: 6px 12px; color: #4fc3f7; font-family: sans-serif; font-size: 11px; z-index: 1500; }
+    #syncStatus { display: none; font-size: 11px; color: #4caf50; margin-top: 8px; text-align: center; }
+    #syncError { display: none; font-size: 11px; color: #f44336; margin-top: 8px; text-align: center; }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
-
   <div id="searchBar">
     <input type="text" id="searchInput" placeholder="🔍 Address, landmark, or zip code..." />
     <button id="searchBtn" onclick="doSearch()">Go</button>
   </div>
-
   <div id="syncBadge">🔗 Linked to SetScout</div>
-
   <div id="ui">
     <h3>☀️ Sun Path — <span id="locationName"></span></h3>
     <div id="timeDisplay">--</div>
@@ -174,7 +95,6 @@
       <span><div class="label">🌃</div><div id="t-sunset">--</div></span>
     </div>
   </div>
-
   <div id="dateToggle" onclick="toggleDatePanel()">📅 SHOOT DATE</div>
   <div id="datePanel">
     <h3>📅 Shoot Date Planner</h3>
@@ -189,19 +109,14 @@
       <div>🌃 Sunset: <span id="dp-sunset">--</span></div>
       <div>⏱️ Daylight: <span id="dp-daylight">--</span></div>
     </div>
-    <div id="goldenHourNote">
-      💡 Golden hour gives warm, directional light ideal for dramatic cinematography. Plan wide shots within 30 min of sunrise or sunset.
-    </div>
+    <div id="goldenHourNote">💡 Golden hour gives warm, directional light ideal for dramatic cinematography. Plan wide shots within 30 min of sunrise or sunset.</div>
   </div>
-
   <div id="municPopup">
     <h3>🏛️ Municipal Intel</h3>
     <div id="municContent"></div>
   </div>
-
   <div id="sceneLinkBtn" onclick="openSceneModal()">🎬 Link Scene</div>
   <div id="sceneTag"></div>
-
   <div id="sceneModal">
     <h3>🎬 Scene Linking — <span id="sceneLocName"></span></h3>
     <div id="syncIndicator" style="font-size:11px;color:#4fc3f7;margin-bottom:8px;display:none;">🔗 Synced with SetScout database</div>
@@ -212,17 +127,16 @@
     <label>Scene Name</label>
     <input type="text" id="sceneName" placeholder="e.g. The Chase" />
     <label>Production Note</label>
-    <textarea id="sceneNote" placeholder="e.g. Need overcast light, avoid midday sun, wide establishing shot from north side"></textarea>
+    <textarea id="sceneNote" placeholder="e.g. Need overcast light, avoid midday sun"></textarea>
     <div class="btn-row">
       <button class="btn btn-save" onclick="saveScene()">Save Scene Tag</button>
       <button class="btn btn-cancel" onclick="closeSceneModal()">Cancel</button>
     </div>
-    <div class="sync-status" id="syncStatus">✅ Saved to SetScout</div>
-    <div class="sync-error" id="syncError">⚠️ Saved locally only — not connected to SetScout</div>
+    <div id="syncStatus">✅ Saved to SetScout</div>
+    <div id="syncError">⚠️ Saved locally only — not connected to SetScout</div>
   </div>
 
   <script>
-    // --- Base44 API Config ---
     const BASE44_APP_ID = "6a074ecd37009e621891aad3";
     const BASE44_API_KEY = "b8c8363ef186414b98e50c6755ea2293";
     const BASE44_BASE_URL = `https://set-scout-pro.base44.app/api/apps/${BASE44_APP_ID}/entities`;
@@ -237,28 +151,17 @@
       } catch (e) { return null; }
     }
 
-async function saveSceneTagsToBase44(locationId, sceneTags) {
+    async function saveSceneTagsToBase44(locationId, tags) {
       try {
-        console.log("Saving to Base44...", locationId, sceneTags);
         const res = await fetch(`${BASE44_BASE_URL}/Location/${locationId}`, {
           method: "PUT",
-          headers: { 
-            "api_key": BASE44_API_KEY, 
-            "Content-Type": "application/json" 
-          },
-          body: JSON.stringify({ scene_tags: sceneTags })
+          headers: { "api_key": BASE44_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ scene_tags: tags })
         });
-        const responseText = await res.text();
-        console.log("Base44 response status:", res.status);
-        console.log("Base44 response body:", responseText);
         return res.ok;
-      } catch (e) { 
-        console.error("Base44 save error:", e);
-        return false; 
-      }
+      } catch (e) { return false; }
     }
 
-    // Florida Municipal Data
     const floridaFilmData = {
       "Miami-Dade": { state: "FL", filmOffice: "Miami-Dade Office of Film & Entertainment", phone: "(305) 375-3288", contact: "film@miamidade.gov", permitFee: "$150 – $500", processingTime: "3–5 business days", restrictions: ["No filming after 11PM in residential areas", "Drone permits required separately", "Beach locations need Parks dept approval"], lastVerified: "May 2026" },
       "Broward": { state: "FL", filmOffice: "Film Lauderdale", phone: "(954) 357-6990", contact: "filmlauderdale.org", permitFee: "FREE (special services billed separately)", processingTime: "3 business days", restrictions: ["COI required ($1M minimum)", "Covers 31 municipalities in one application", "Drone and pyro permits required separately"], lastVerified: "May 2026" },
@@ -308,7 +211,6 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       "Taylor": { state: "FL", filmOffice: "Taylor County Chamber of Commerce", phone: "(850) 584-5366", contact: "taylorcountychamber.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
       "Lafayette": { state: "FL", filmOffice: "Lafayette County Chamber of Commerce", phone: "(386) 294-2705", contact: "lafayettecountyfl.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
       "Dixie": { state: "FL", filmOffice: "Dixie County Chamber of Commerce", phone: "(352) 498-5454", contact: "dixiecounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
-      "Gilchrist": { state: "FL", filmOffice: "Gilchrist Board of Commissioners", phone: "(352) 463-3169", contact: "gilchristcounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
       "Wakulla": { state: "FL", filmOffice: "Wakulla County Economic Development", phone: "(850) 926-0919", contact: "wakullacounty.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "Wakulla Springs needs separate park permit"], lastVerified: "May 2026" },
       "Franklin": { state: "FL", filmOffice: "Apalachicola Bay Chamber of Commerce", phone: "(850) 653-9419", contact: "apalachicolabay.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required", "State park locations need DEP permit"], lastVerified: "May 2026" },
       "Gulf": { state: "FL", filmOffice: "Gulf County Tourism Office", phone: "(850) 227-1223", contact: "visitgulf.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
@@ -327,8 +229,7 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       "Union": { state: "FL", filmOffice: "Union County Chamber of Commerce", phone: "(386) 496-2536", contact: "unioncountyfl.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
       "Bradford": { state: "FL", filmOffice: "North Florida Regional Chamber of Commerce", phone: "(904) 964-5278", contact: "starkefl.org", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
       "Hardee": { state: "FL", filmOffice: "Hardee Board of County Commissioners", phone: "(863) 773-9430", contact: "hardeecounty.net", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
-      "DeSoto": { state: "FL", filmOffice: "DeSoto County Chamber of Commerce", phone: "(863) 494-4033", contact: "desotochamber.net", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" },
-      "Highlands": { state: "FL", filmOffice: "Visit Sebring Tourist Development Council", phone: "(863) 402-6909", contact: "visitsebringusflorida.com", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" }
+      "DeSoto": { state: "FL", filmOffice: "DeSoto County Chamber of Commerce", phone: "(863) 494-4033", contact: "desotochamber.net", permitFee: "FREE", processingTime: "5 business days", restrictions: ["COI required"], lastVerified: "May 2026" }
     };
 
     async function getFloridaCounty(checkLat, checkLng) {
@@ -398,7 +299,6 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       window.open(`mailto:dj.enviouscultureprod@gmail.com?subject=${subject}&body=${body}`);
     }
 
-    // URL params
     const params = new URLSearchParams(window.location.search);
     let lat = parseFloat(params.get("lat")) || 25.7617;
     let lng = parseFloat(params.get("lng")) || -80.1918;
@@ -407,15 +307,11 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
     const locationId = params.get("locationId") || null;
 
     document.getElementById("locationName").textContent = locationName;
-    if (locationId) {
-      document.getElementById("syncBadge").style.display = "block";
-    }
+    if (locationId) document.getElementById("syncBadge").style.display = "block";
 
     const todayStr = new Date().toISOString().split("T")[0];
     document.getElementById("shootDate").value = todayStr;
     let selectedDate = new Date();
-
-    // Scene data — synced with Base44 when locationId is present
     let sceneTags = [];
 
     async function loadSceneTagsFromBase44() {
@@ -427,7 +323,6 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       }
     }
 
-    // Cesium setup
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3YTUzZDI5MC1hYzY0LTRhODctOGI0Mi1jZjM4NjFiYWZlM2QiLCJpZCI6NDE2OTcxLCJpYXQiOjE3NzU5NTgwNjh9.XLiMJOeS6bfl6V-SbpAe3tAAznxBPKheLvYVven0tXM';
 
     const viewer = new Cesium.Viewer("cesiumContainer", {
@@ -471,7 +366,6 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       updateSceneTag();
     }
 
-    // Scene functions
     function openSceneModal() {
       document.getElementById("sceneLocName").textContent = locationName;
       document.getElementById("sceneNumber").value = "";
@@ -492,16 +386,13 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       const name = document.getElementById("sceneName").value.trim();
       const note = document.getElementById("sceneNote").value.trim();
       if (!num && !name) { alert("Please enter at least a scene number or name."); return; }
-
       const newTag = { scene_number: num, scene_name: name, note: note, location: locationName };
       sceneTags.push(newTag);
       renderSavedScenes();
       updateSceneTag();
-
       document.getElementById("sceneNumber").value = "";
       document.getElementById("sceneName").value = "";
       document.getElementById("sceneNote").value = "";
-
       if (locationId) {
         const success = await saveSceneTagsToBase44(locationId, sceneTags);
         if (success) {
@@ -518,9 +409,7 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
       sceneTags.splice(index, 1);
       renderSavedScenes();
       updateSceneTag();
-      if (locationId) {
-        await saveSceneTagsToBase44(locationId, sceneTags);
-      }
+      if (locationId) await saveSceneTagsToBase44(locationId, sceneTags);
     }
 
     function renderSavedScenes() {
@@ -530,18 +419,20 @@ async function saveSceneTagsToBase44(locationId, sceneTags) {
         return;
       }
       container.innerHTML = sceneTags.map((s, i) => `
-  <div class="scene-item">
-    <span class="scene-remove" onclick="removeScene(${i})">✕ Remove</span>
-    <div class="scene-title">Scene ${s.scene_number || s.num}${(s.scene_name || s.name) ? ' — ' + (s.scene_name || s.name) : ''}</div>
-    ${s.note ? `<div class="scene-note">${s.note}</div>` : ''}
-  </div>
-`).join('');
+        <div class="scene-item">
+          <span class="scene-remove" onclick="removeScene(${i})">✕ Remove</span>
+          <div class="scene-title">Scene ${s.scene_number || s.num}${(s.scene_name || s.name) ? ' — ' + (s.scene_name || s.name) : ''}</div>
+          ${s.note ? `<div class="scene-note">${s.note}</div>` : ''}
+        </div>
+      `).join('');
+    }
 
     function updateSceneTag() {
       const tag = document.getElementById("sceneTag");
       if (sceneTags.length > 0) {
         const first = sceneTags[0];
-tag.textContent = `🎬 Scene ${first.scene_number || first.num}${(first.scene_name || first.name) ? ' — ' + (first.scene_name || first.name) : ''}${sceneTags.length > 1 ? ` +${sceneTags.length - 1} more` : ''}`;
+        tag.textContent = `🎬 Scene ${first.scene_number || first.num}${(first.scene_name || first.name) ? ' — ' + (first.scene_name || first.name) : ''}${sceneTags.length > 1 ? ` +${sceneTags.length - 1} more` : ''}`;
+        tag.style.display = "block";
       } else {
         tag.style.display = "none";
       }
@@ -698,7 +589,6 @@ tag.textContent = `🎬 Scene ${first.scene_number || first.num}${(first.scene_n
 
     document.getElementById("scrubber").addEventListener("input", function() { updateSun(parseInt(this.value)); });
 
-    // Init
     placePin(lat, lng, locationName);
     buildSunArc(lat, lng, selectedDate);
     updateKeyTimes(lat, lng, selectedDate);
