@@ -237,15 +237,25 @@
       } catch (e) { return null; }
     }
 
-    async function saveSceneTagsToBase44(locationId, sceneTags) {
+async function saveSceneTagsToBase44(locationId, sceneTags) {
       try {
+        console.log("Saving to Base44...", locationId, sceneTags);
         const res = await fetch(`${BASE44_BASE_URL}/Location/${locationId}`, {
           method: "PUT",
-          headers: { "api_key": BASE44_API_KEY, "Content-Type": "application/json" },
+          headers: { 
+            "api_key": BASE44_API_KEY, 
+            "Content-Type": "application/json" 
+          },
           body: JSON.stringify({ scene_tags: sceneTags })
         });
+        const responseText = await res.text();
+        console.log("Base44 response status:", res.status);
+        console.log("Base44 response body:", responseText);
         return res.ok;
-      } catch (e) { return false; }
+      } catch (e) { 
+        console.error("Base44 save error:", e);
+        return false; 
+      }
     }
 
     // Florida Municipal Data
